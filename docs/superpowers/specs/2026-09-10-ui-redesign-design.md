@@ -183,16 +183,18 @@ Top bar, full width, `surface` background, bottom `border`:
 
 ## Testing
 
-- Unit tests for `ProjectContextService`: selection persists across a simulated reload
-  (mock `localStorage`), `selectProject` updates the signal, an invalid/stale persisted id
-  falls back to the first project once the list loads.
-- Existing component unit tests (`BibleComponent`, `ProductionPlanComponent`) updated to
-  inject/mock `ProjectContextService` instead of stubbing `getProjects()` directly.
-- Styling itself is not unit-testable. Per the Phase 1 lesson (a frozen-UI regression that
-  was invisible to all 56 automated tests and was only caught by live browser verification),
-  the implementation plan must include a mandatory live browser walkthrough of all three
-  views — including switching projects via the dropdown — before this work is considered
-  done.
+Minimal automated testing on this piece of work — priority is implementation speed, not
+coverage. Keep the existing test suite green (fix any test that breaks because
+`BibleComponent`/`ProductionPlanComponent` no longer call `getProjects()` directly), but do
+not add new unit-test coverage for `ProjectContextService` or the restyled views as a
+required deliverable.
+
+What is **not optional**: a live browser walkthrough of all three views — including
+switching projects via the dropdown — before this work is considered done. Styling is not
+unit-testable at all, and per the Phase 1 lesson, a fully broken UI (frozen after every
+async load) was invisible to 56 passing automated tests and was only caught by manually
+using the app in a browser. That check stays mandatory even though new automated coverage
+does not.
 
 ## Global Constraints (for the implementation plan)
 
