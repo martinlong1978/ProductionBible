@@ -1,5 +1,51 @@
-<nav>
-  <a routerLink="/bible">Bible</a>
-  <a routerLink="/production-plan">Production Plan</a>
-</nav>
-<router-outlet></router-outlet>
+<div class="min-h-screen bg-bg text-text-primary">
+  <header class="border-b border-border bg-surface">
+    <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
+      <div class="flex items-center gap-8">
+        <span class="text-lg font-semibold tracking-tight">ProductionBible</span>
+        <nav class="hidden md:flex items-center gap-1">
+          <a routerLink="/bible" routerLinkActive="bg-accent text-white"
+             class="rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary">Bible</a>
+          <a routerLink="/production-plan" routerLinkActive="bg-accent text-white"
+             class="rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary">Production Plan</a>
+        </nav>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="relative">
+          <button type="button" (click)="toggleProjectMenu()"
+                  class="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium hover:bg-surface-hover">
+            {{ currentProjectName() }}
+            <span class="text-text-secondary">&#9662;</span>
+          </button>
+          <ul *ngIf="projectMenuOpen"
+              class="absolute right-0 z-10 mt-1 w-56 rounded-md border border-border bg-surface py-1 shadow-lg">
+            <li *ngFor="let project of projectContext.projects()">
+              <button type="button" (click)="choose(project.id)"
+                      class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                      [class.text-accent]="project.id === projectContext.selectedProjectId()">
+                {{ project.name }}
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <button type="button" (click)="toggleMobileNav()"
+                class="rounded-md border border-border p-1.5 md:hidden" aria-label="Toggle navigation">
+          &#9776;
+        </button>
+      </div>
+    </div>
+
+    <nav *ngIf="mobileNavOpen" class="flex flex-col gap-1 border-t border-border px-4 py-2 md:hidden">
+      <a routerLink="/bible" (click)="toggleMobileNav()"
+         class="rounded-md px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover">Bible</a>
+      <a routerLink="/production-plan" (click)="toggleMobileNav()"
+         class="rounded-md px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover">Production Plan</a>
+    </nav>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-4 py-6">
+    <router-outlet></router-outlet>
+  </main>
+</div>
