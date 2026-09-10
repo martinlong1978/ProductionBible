@@ -3132,3 +3132,251 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 12: Production Plan view component (shoot order, grouped by phase)
+
+Unlike Bible view (Task 10), which is scoped to one episode, Production Plan is scoped to the whole project — shoot order groups shots from different episodes together by physical phase/setup (e.g. Phase 1 "The software time machine" is an EP2 shot filmed first). So this component fetches every episode's assets and merges them client-side with `forkJoin`, rather than reusing `BibleComponent`'s single-episode pattern.
+
+**Files:**
+- Create: `web/src/app/production-plan/production-plan.component.ts`
+- Create: `web/src/app/production-plan/production-plan.component.html`
+- Test: `web/src/app/production-plan/production-plan.component.spec.ts`
+
+**Interfaces:**
+- Consumes: `ApiClientService.getProjects()`, `.getEpisodes()`, `.getAssets()` (Task 9).
+- Produces: `ProductionPlanComponent` with a `groups: { phase: string; assets: AssetDto[] }[]` field, sorted by `AssetDto.sequenceNumber` within each group, grouped by the `PhaseGroup` key in `AssetDto.attributes` (falling back to `'Unphased'` when absent — an asset the importer didn't attach a phase to, or one created later via the API/MCP without one).
+
+- [ ] **Step 1: Write the failing component test**
+
+`web/src/app/production-plan/production-plan.component.spec.ts`:
+
+```typescript
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
+import { ProductionPlanComponent } from './production-plan.component';
+import { ApiClientService } from '../core/api-client.service';
+import { AssetDto, EpisodeDto, ProjectDto } from '../core/models';
+
+describe('ProductionPlanComponent', () => {
+  let fixture: ComponentFixture<ProductionPlanComponent>;
+  let component: ProductionPlanComponent;
+  let apiSpy: jasmine.SpyObj<ApiClientService>;
+
+  const project: ProjectDto = { id: 1, name: 'HalfNut ELS', description: null };
+  const episode1: EpisodeDto = { id: 10, projectId: 1, name: 'EP1', orderIndex: 1 };
+  const episode2: EpisodeDto = { id: 20, projectId: 1, name: 'EP2', orderIndex: 2 };
+
+  function asset(id: number, code: string, sequenceNumber: number, phase: string): AssetDto {
+    return {
+      id, episodeId: 10, assetTypeId: 1, assetTypeName: 'Shot', code, title: code,
+      scriptText: null, status: 'Planned', notes: null, sequenceNumber, targetLengthSeconds: null,
+      completedAtUtc: null, attributes: { PhaseGroup: phase }, beatIds: [],
+    };
+  }
+
+  beforeEach(async () => {
+    apiSpy = jasmine.createSpyObj('ApiClientService', ['getProjects', 'getEpisodes', 'getAssets']);
+    apiSpy.getProjects.and.returnValue(of([project]));
+    apiSpy.getEpisodes.and.returnValue(of([episode1, episode2]));
+    apiSpy.getAssets.and.callFake((episodeId: number) =>
+      episodeId === 20
+        ? of([asset(2, 'F-01', 1, 'Phase 1: The software time machine')])
+        : of([asset(1, 'B-02', 2, 'Phase 2: Makerspace trip')]));
+
+    await TestBed.configureTestingModule({
+      imports: [ProductionPlanComponent],
+      providers: [{ provide: ApiClientService, useValue: apiSpy }],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(ProductionPlanComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('merges assets from every episode in the project', () => {
+    const allCodes = component.groups.flatMap((g) => g.assets.map((a) => a.code));
+    expect(allCodes).toEqual(['F-01', 'B-02']);
+  });
+
+  it('orders phase groups by the lowest sequence number in that phase', () => {
+    expect(component.groups.map((g) => g.phase)).toEqual([
+      'Phase 1: The software time machine',
+      'Phase 2: Makerspace trip',
+    ]);
+  });
+
+  it('falls back to Unphased when an asset has no PhaseGroup attribute', () => {
+    apiSpy.getAssets.and.returnValue(of([{
+      id: 3, episodeId: 10, assetTypeId: 1, assetTypeName: 'Shot', code: 'X-01', title: 'X-01',
+      scriptText: null, status: 'Planned', notes: null, sequenceNumber: 1, targetLengthSeconds: null,
+      completedAtUtc: null, attributes: {}, beatIds: [],
+    }]));
+
+    component.ngOnInit();
+
+    expect(component.groups.some((g) => g.phase === 'Unphased')).toBeTrue();
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+cd web
+npx ng test --watch=false
+cd ..
+```
+
+Expected: FAIL to compile — `ProductionPlanComponent` does not exist yet.
+
+- [ ] **Step 3: Write the component**
+
+`web/src/app/production-plan/production-plan.component.ts`:
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { forkJoin } from 'rxjs';
+import { ApiClientService } from '../core/api-client.service';
+import { AssetDto } from '../core/models';
+
+interface PhaseGroup {
+  phase: string;
+  assets: AssetDto[];
+}
+
+@Component({
+  selector: 'app-production-plan',
+  standalone: true,
+  imports: [CommonModule],
+  templateUrl: './production-plan.component.html',
+})
+export class ProductionPlanComponent implements OnInit {
+  groups: PhaseGroup[] = [];
+
+  constructor(private readonly api: ApiClientService) {}
+
+  ngOnInit(): void {
+    this.api.getProjects().subscribe((projects) => {
+      const project = projects[0];
+      if (!project) return;
+
+      this.api.getEpisodes(project.id).subscribe((episodes) => {
+        if (episodes.length === 0) {
+          this.groups = [];
+          return;
+        }
+
+        forkJoin(episodes.map((episode) => this.api.getAssets(episode.id))).subscribe((assetLists) => {
+          this.groups = this.buildGroups(assetLists.flat());
+        });
+      });
+    });
+  }
+
+  private buildGroups(assets: AssetDto[]): PhaseGroup[] {
+    const sorted = [...assets].sort(
+      (a, b) => (a.sequenceNumber ?? Number.MAX_SAFE_INTEGER) - (b.sequenceNumber ?? Number.MAX_SAFE_INTEGER));
+
+    const map = new Map<string, AssetDto[]>();
+    for (const asset of sorted) {
+      const phase = asset.attributes['PhaseGroup'] ?? 'Unphased';
+      if (!map.has(phase)) map.set(phase, []);
+      map.get(phase)!.push(asset);
+    }
+
+    return Array.from(map.entries()).map(([phase, assets]) => ({ phase, assets }));
+  }
+}
+```
+
+- [ ] **Step 4: Write the template**
+
+`web/src/app/production-plan/production-plan.component.html`:
+
+```html
+<div class="production-plan-view">
+  <section class="phase-group" *ngFor="let group of groups">
+    <h3>{{ group.phase }}</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Seq</th><th>Code</th><th>Title</th><th>Location</th>
+          <th>Angle &amp; camera</th><th>Audio</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let asset of group.assets">
+          <td>{{ asset.sequenceNumber }}</td>
+          <td>{{ asset.code }}</td>
+          <td>{{ asset.title }}</td>
+          <td>{{ asset.attributes['Location'] }}</td>
+          <td>{{ asset.attributes['AngleAndCamera'] }}</td>
+          <td>{{ asset.attributes['AudioNotes'] }}</td>
+          <td>{{ asset.status }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+```
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+```bash
+cd web
+npx ng test --watch=false
+cd ..
+```
+
+Expected: PASS, 3 tests.
+
+- [ ] **Step 6: Wire up routing between the two views**
+
+`web/src/app/app.routes.ts`:
+
+```typescript
+import { Routes } from '@angular/router';
+import { BibleComponent } from './bible/bible.component';
+import { ProductionPlanComponent } from './production-plan/production-plan.component';
+
+export const routes: Routes = [
+  { path: '', redirectTo: 'bible', pathMatch: 'full' },
+  { path: 'bible', component: BibleComponent },
+  { path: 'production-plan', component: ProductionPlanComponent },
+];
+```
+
+Replace the generated `web/src/app/app.component.html` with a simple nav shell:
+
+```html
+<nav>
+  <a routerLink="/bible">Bible</a>
+  <a routerLink="/production-plan">Production Plan</a>
+</nav>
+<router-outlet></router-outlet>
+```
+
+And add `RouterLink` to `app.component.ts`'s standalone `imports` array (alongside the existing `RouterOutlet`).
+
+- [ ] **Step 7: Run the full Angular test suite to verify nothing broke**
+
+```bash
+cd web
+npx ng test --watch=false
+cd ..
+```
+
+Expected: PASS, all tests from Tasks 9-12.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add -A
+git commit -m "Add Production Plan view component and wire up routing
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
