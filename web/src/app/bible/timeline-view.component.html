@@ -1,0 +1,11 @@
+<div class="timeline-view">
+  <div class="lane" *ngFor="let lane of lanes">
+    <h4>{{ lane.name }}</h4>
+    <div class="lane-track">
+      <div class="clip" *ngFor="let asset of lane.assets">
+        <strong>{{ asset.code }}</strong>
+        <span>{{ asset.title }}</span>
+      </div>
+    </div>
+  </div>
+</div>

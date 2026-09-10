@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
 import { AssetDto, BeatDto, EpisodeDto, UpdateAssetRequest } from '../core/models';
+import { TimelineViewComponent } from './timeline-view.component';
 
 @Component({
   selector: 'app-bible',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TimelineViewComponent],
   templateUrl: './bible.component.html',
 })
 export class BibleComponent implements OnInit {

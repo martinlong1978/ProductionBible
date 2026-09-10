@@ -9,7 +9,7 @@
     </button>
   </div>
 
-  <ng-container *ngIf="viewMode === 'list'">
+  <ng-container *ngIf="viewMode === 'list'; else timelineTpl">
     <section class="beat" *ngFor="let beat of beats">
       <h3>{{ beat.timecode }} — {{ beat.purpose }}</h3>
       <ul>
@@ -47,4 +47,7 @@
       </ul>
     </section>
   </ng-container>
+  <ng-template #timelineTpl>
+    <app-timeline-view [beats]="beats" [assets]="assets"></app-timeline-view>
+  </ng-template>
 </div>
