@@ -1,7 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { signal } from '@angular/core';
 import { BibleComponent } from './bible.component';
 import { ApiClientService } from '../core/api-client.service';
+import { ProjectContextService } from '../core/project-context.service';
 import { AssetDto, BeatDto, EpisodeDto, ProjectDto } from '../core/models';
 
 describe('BibleComponent', () => {
@@ -20,23 +22,32 @@ describe('BibleComponent', () => {
   const unlinkedAsset: AssetDto = { ...linkedAsset, id: 1001, code: 'A-02', beatIds: [] };
 
   beforeEach(async () => {
-    apiSpy = jasmine.createSpyObj('ApiClientService', ['getProjects', 'getEpisodes', 'getBeats', 'getAssets', 'updateAsset']);
-    apiSpy.getProjects.and.returnValue(of([project]));
+    apiSpy = jasmine.createSpyObj('ApiClientService', ['getEpisodes', 'getBeats', 'getAssets', 'updateAsset']);
     apiSpy.getEpisodes.and.returnValue(of([episode]));
     apiSpy.getBeats.and.returnValue(of([beat]));
     apiSpy.getAssets.and.returnValue(of([linkedAsset, unlinkedAsset]));
 
+    const projectContextStub = {
+      projects: signal<ProjectDto[]>([project]),
+      selectedProjectId: signal<number | null>(project.id),
+      selectProject: jasmine.createSpy('selectProject'),
+    };
+
     await TestBed.configureTestingModule({
       imports: [BibleComponent],
-      providers: [{ provide: ApiClientService, useValue: apiSpy }],
+      providers: [
+        { provide: ApiClientService, useValue: apiSpy },
+        { provide: ProjectContextService, useValue: projectContextStub },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(BibleComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+    fixture.detectChanges();
   });
 
-  it('loads the first episode of the first project on init', () => {
+  it('loads the first episode of the selected project on construction', () => {
     expect(apiSpy.getEpisodes).toHaveBeenCalledWith(1);
     expect(component.selectedEpisodeId).toBe(10);
     expect(component.beats).toEqual([beat]);
@@ -50,11 +61,11 @@ describe('BibleComponent', () => {
     expect(component.unassignedAssets).toEqual([unlinkedAsset]);
   });
 
-  it('toggles view mode between list and timeline', () => {
+  it('sets the view mode via setViewMode', () => {
     expect(component.viewMode).toBe('list');
-    component.toggleTimeline();
+    component.setViewMode('timeline');
     expect(component.viewMode).toBe('timeline');
-    component.toggleTimeline();
+    component.setViewMode('list');
     expect(component.viewMode).toBe('list');
   });
 

@@ -1,48 +1,102 @@
-<div class="bible-view">
-  <div class="episode-picker">
-    <label for="episode-select">Episode</label>
-    <select id="episode-select" [ngModel]="selectedEpisodeId" (ngModelChange)="selectEpisode($event)">
-      <option *ngFor="let ep of episodes" [ngValue]="ep.id">{{ ep.name }}</option>
-    </select>
-    <button type="button" (click)="toggleTimeline()">
-      {{ viewMode === 'list' ? 'Show Timeline' : 'Show List' }}
-    </button>
+<div class="space-y-6">
+  <div class="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-surface p-4">
+    <div class="flex items-center gap-3">
+      <label for="episode-select" class="text-sm font-medium text-text-secondary">Episode</label>
+      <select id="episode-select" [ngModel]="selectedEpisodeId" (ngModelChange)="selectEpisode($event)"
+              class="rounded-md border border-border bg-bg px-3 py-1.5 text-sm text-text-primary focus:border-accent focus:outline-none">
+        <option *ngFor="let ep of episodes" [ngValue]="ep.id">{{ ep.name }}</option>
+      </select>
+    </div>
+
+    <div class="inline-flex rounded-md border border-border bg-bg p-1">
+      <button type="button" (click)="setViewMode('list')"
+              class="rounded px-3 py-1 text-sm font-medium transition-colors"
+              [class.bg-accent]="viewMode === 'list'"
+              [class.text-white]="viewMode === 'list'"
+              [class.text-text-secondary]="viewMode !== 'list'">List</button>
+      <button type="button" (click)="setViewMode('timeline')"
+              class="rounded px-3 py-1 text-sm font-medium transition-colors"
+              [class.bg-accent]="viewMode === 'timeline'"
+              [class.text-white]="viewMode === 'timeline'"
+              [class.text-text-secondary]="viewMode !== 'timeline'">Timeline</button>
+    </div>
   </div>
 
   <ng-container *ngIf="viewMode === 'list'; else timelineTpl">
-    <section class="beat" *ngFor="let beat of beats">
-      <h3>{{ beat.timecode }} — {{ beat.purpose }}</h3>
-      <ul>
-        <li *ngFor="let asset of assetsForBeat(beat)">
-          <strong>{{ asset.code }}</strong> — {{ asset.title }} ({{ asset.assetTypeName }}, {{ asset.status }})
-          <span *ngIf="asset.notes"> — {{ asset.notes }}</span>
-          <ng-container *ngIf="editingAssetId === asset.id">
-            <div class="asset-edit">
-              <label>Status <input type="text" [(ngModel)]="editStatus" /></label>
-              <label>Notes <textarea [(ngModel)]="editNotes"></textarea></label>
-              <button type="button" (click)="saveEdit(asset)">Save</button>
-              <button type="button" (click)="cancelEdit()">Cancel</button>
+    <ng-container *ngFor="let beat of beats">
+      <section class="rounded-lg border border-border bg-surface p-4">
+        <h3 class="mb-3 text-sm font-semibold text-text-secondary">{{ beat.timecode }} &mdash; {{ beat.purpose }}</h3>
+        <ul class="space-y-2">
+          <li *ngFor="let asset of assetsForBeat(beat)" class="rounded-md border border-border bg-bg p-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-mono text-sm text-text-secondary">{{ asset.code }}</span>
+              <span class="font-medium">{{ asset.title }}</span>
+              <span class="text-xs text-text-secondary">({{ asset.assetTypeName }})</span>
+              <span class="rounded-full px-2 py-0.5 text-xs font-medium text-white" [ngClass]="statusPillClass(asset.status)">
+                {{ asset.status }}
+              </span>
+              <button type="button" *ngIf="editingAssetId !== asset.id" (click)="startEdit(asset)"
+                      class="ml-auto rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-hover">Edit</button>
             </div>
-          </ng-container>
-          <button type="button" *ngIf="editingAssetId !== asset.id" (click)="startEdit(asset)">Edit</button>
-        </li>
-      </ul>
-    </section>
-    <section class="beat unassigned" *ngIf="unassignedAssets.length > 0">
-      <h3>Unassigned</h3>
-      <ul>
-        <li *ngFor="let asset of unassignedAssets">
-          <strong>{{ asset.code }}</strong> — {{ asset.title }} ({{ asset.assetTypeName }}, {{ asset.status }})
-          <span *ngIf="asset.notes"> — {{ asset.notes }}</span>
-          <ng-container *ngIf="editingAssetId === asset.id">
-            <div class="asset-edit">
-              <label>Status <input type="text" [(ngModel)]="editStatus" /></label>
-              <label>Notes <textarea [(ngModel)]="editNotes"></textarea></label>
-              <button type="button" (click)="saveEdit(asset)">Save</button>
-              <button type="button" (click)="cancelEdit()">Cancel</button>
+            <p *ngIf="asset.notes" class="mt-1 text-sm text-text-secondary">{{ asset.notes }}</p>
+
+            <div *ngIf="editingAssetId === asset.id" class="mt-3 space-y-2 border-t border-border pt-3">
+              <label class="block text-sm">
+                <span class="mb-1 block text-text-secondary">Status</span>
+                <input type="text" [(ngModel)]="editStatus"
+                       class="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm focus:border-accent focus:outline-none" />
+              </label>
+              <label class="block text-sm">
+                <span class="mb-1 block text-text-secondary">Notes</span>
+                <textarea [(ngModel)]="editNotes"
+                          class="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm focus:border-accent focus:outline-none"></textarea>
+              </label>
+              <div class="flex gap-2">
+                <button type="button" (click)="saveEdit(asset)"
+                        class="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover">Save</button>
+                <button type="button" (click)="cancelEdit()"
+                        class="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-surface-hover">Cancel</button>
+              </div>
             </div>
-          </ng-container>
-          <button type="button" *ngIf="editingAssetId !== asset.id" (click)="startEdit(asset)">Edit</button>
+          </li>
+        </ul>
+      </section>
+    </ng-container>
+
+    <section class="rounded-lg border border-border bg-surface p-4" *ngIf="unassignedAssets.length > 0">
+      <h3 class="mb-3 text-sm font-semibold text-text-secondary">Unassigned</h3>
+      <ul class="space-y-2">
+        <li *ngFor="let asset of unassignedAssets" class="rounded-md border border-border bg-bg p-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="font-mono text-sm text-text-secondary">{{ asset.code }}</span>
+            <span class="font-medium">{{ asset.title }}</span>
+            <span class="text-xs text-text-secondary">({{ asset.assetTypeName }})</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium text-white" [ngClass]="statusPillClass(asset.status)">
+              {{ asset.status }}
+            </span>
+            <button type="button" *ngIf="editingAssetId !== asset.id" (click)="startEdit(asset)"
+                    class="ml-auto rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-hover">Edit</button>
+          </div>
+          <p *ngIf="asset.notes" class="mt-1 text-sm text-text-secondary">{{ asset.notes }}</p>
+
+          <div *ngIf="editingAssetId === asset.id" class="mt-3 space-y-2 border-t border-border pt-3">
+            <label class="block text-sm">
+              <span class="mb-1 block text-text-secondary">Status</span>
+              <input type="text" [(ngModel)]="editStatus"
+                     class="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm focus:border-accent focus:outline-none" />
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1 block text-text-secondary">Notes</span>
+              <textarea [(ngModel)]="editNotes"
+                        class="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm focus:border-accent focus:outline-none"></textarea>
+            </label>
+            <div class="flex gap-2">
+              <button type="button" (click)="saveEdit(asset)"
+                      class="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover">Save</button>
+              <button type="button" (click)="cancelEdit()"
+                      class="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-surface-hover">Cancel</button>
+            </div>
+          </div>
         </li>
       </ul>
     </section>

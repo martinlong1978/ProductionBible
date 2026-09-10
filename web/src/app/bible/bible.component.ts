@@ -1,8 +1,10 @@
-import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
+import { ProjectContextService } from '../core/project-context.service';
 import { AssetDto, BeatDto, EpisodeDto, UpdateAssetRequest } from '../core/models';
+import { statusPillClass } from '../core/status-style';
 import { TimelineViewComponent } from './timeline-view.component';
 
 @Component({
@@ -11,28 +13,29 @@ import { TimelineViewComponent } from './timeline-view.component';
   imports: [CommonModule, FormsModule, TimelineViewComponent],
   templateUrl: './bible.component.html',
 })
-export class BibleComponent implements OnInit {
+export class BibleComponent {
   episodes: EpisodeDto[] = [];
   selectedEpisodeId: number | null = null;
   beats: BeatDto[] = [];
   assets: AssetDto[] = [];
   viewMode: 'list' | 'timeline' = 'list';
+  protected readonly statusPillClass = statusPillClass;
 
-  constructor(private readonly api: ApiClientService, private readonly cdr: ChangeDetectorRef) {}
-
-  ngOnInit(): void {
-    this.api.getProjects().subscribe((projects) => {
-      const project = projects[0];
-      if (!project) return;
-      this.api.getEpisodes(project.id).subscribe((episodes) => {
-        this.episodes = episodes;
-        if (episodes.length > 0) {
-          this.selectEpisode(episodes[0].id);
-        }
-        this.cdr.markForCheck();
-      });
-      this.cdr.markForCheck();
+  constructor(
+    private readonly api: ApiClientService,
+    private readonly cdr: ChangeDetectorRef,
+    protected readonly projectContext: ProjectContextService,
+  ) {
+    effect(() => {
+      const projectId = this.projectContext.selectedProjectId();
+      if (projectId !== null) {
+        this.loadEpisodes(projectId);
+      }
     });
+  }
+
+  setViewMode(mode: 'list' | 'timeline'): void {
+    this.viewMode = mode;
   }
 
   selectEpisode(episodeId: number): void {
@@ -54,10 +57,6 @@ export class BibleComponent implements OnInit {
   get unassignedAssets(): AssetDto[] {
     const linkedIds = new Set(this.beats.flatMap((beat) => beat.assetIds));
     return this.assets.filter((asset) => !linkedIds.has(asset.id));
-  }
-
-  toggleTimeline(): void {
-    this.viewMode = this.viewMode === 'list' ? 'timeline' : 'list';
   }
 
   editingAssetId: number | null = null;
@@ -93,6 +92,20 @@ export class BibleComponent implements OnInit {
         this.assets[index] = updated;
       }
       this.editingAssetId = null;
+      this.cdr.markForCheck();
+    });
+  }
+
+  private loadEpisodes(projectId: number): void {
+    this.api.getEpisodes(projectId).subscribe((episodes) => {
+      this.episodes = episodes;
+      if (episodes.length > 0) {
+        this.selectEpisode(episodes[0].id);
+      } else {
+        this.selectedEpisodeId = null;
+        this.beats = [];
+        this.assets = [];
+      }
       this.cdr.markForCheck();
     });
   }
