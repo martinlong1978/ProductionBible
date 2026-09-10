@@ -3860,3 +3860,341 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 15: Importer — `ImportMapper` and console entry point
+
+Orchestrates Tasks 13-14's parsers into one `Project` → `Episode`/`Beat`/`Asset`/`AssetAttribute`/`AssetBeat` graph and saves it. `production_plan.md`'s 65 shot pages are the backbone (they carry `SequenceNumber`, `PhaseGroup`, and the (episode, timecode) pairs that become Beats); `storyboard.html`'s shot rows enrich matching codes with `CaptureNote` and the original `StoryboardMachineConfig`/`StoryboardSetupSection` values (kept as separate attributes from `SceneSetup`, not merged — see the spec's rationale); `storyboard.html`'s animation rows become `Animation`/`Title` assets with no Beat links (Task 13's documented Phase 1 limitation).
+
+**Files:**
+- Create: `src/ProductionBible.Importer/ImportMapper.cs`
+- Modify: `src/ProductionBible.Importer/Program.cs`
+- Test: `tests/ProductionBible.Importer.Tests/ImportMapperTests.cs`
+
+**Interfaces:**
+- Consumes: `StoryboardHtmlParser.Parse` (Task 13), `ProductionPlanMarkdownParser.Parse` (Task 14), `ProductionBibleDbContext` (Task 2).
+- Produces: `ImportMapper.ImportAsync(string storyboardHtml, string productionPlanMarkdown, string projectName) : Task<Project>` — saves everything and returns the created `Project`.
+
+- [ ] **Step 1: Write the failing end-to-end test**
+
+`tests/ProductionBible.Importer.Tests/ImportMapperTests.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+
+namespace ProductionBible.Importer.Tests;
+
+public class ImportMapperTests
+{
+    private static ProductionBibleDbContext CreateInMemoryContext()
+    {
+        var options = new DbContextOptionsBuilder<ProductionBibleDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new ProductionBibleDbContext(options);
+    }
+
+    private static string LoadFixture(string name) =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
+
+    [Fact]
+    public async Task Imports_all_65_shot_pages_as_assets_with_a_populated_scene_setup()
+    {
+        await using var context = CreateInMemoryContext();
+        var mapper = new ImportMapper(context);
+
+        await mapper.ImportAsync(LoadFixture("storyboard.html"), LoadFixture("production_plan.md"), "HalfNut ELS");
+
+        var shotPageAssets = await context.Assets
+            .Where(a => a.SequenceNumber != null)
+            .Include(a => a.Attributes)
+            .ToListAsync();
+        Assert.Equal(65, shotPageAssets.Count);
+
+        var a01 = Assert.Single(shotPageAssets, a => a.Code == "A-01");
+        Assert.Contains(a01.Attributes, attr => attr.Key == "SceneSetup" && attr.Value.Length > 0);
+    }
+
+    [Fact]
+    public async Task Creates_beats_linking_F01_to_both_of_its_timecodes()
+    {
+        await using var context = CreateInMemoryContext();
+        var mapper = new ImportMapper(context);
+
+        await mapper.ImportAsync(LoadFixture("storyboard.html"), LoadFixture("production_plan.md"), "HalfNut ELS");
+
+        var f01 = await context.Assets
+            .Include(a => a.AssetBeats).ThenInclude(ab => ab.Beat)
+            .SingleAsync(a => a.Code == "F-01");
+        var timecodes = f01.AssetBeats.Select(ab => ab.Beat!.Timecode).OrderBy(t => t).ToList();
+        Assert.Equal(new List<string> { "00:00", "22:30" }, timecodes);
+    }
+
+    [Fact]
+    public async Task Pieces_to_camera_get_a_dedicated_asset_type_distinct_from_shots()
+    {
+        await using var context = CreateInMemoryContext();
+        var mapper = new ImportMapper(context);
+
+        await mapper.ImportAsync(LoadFixture("storyboard.html"), LoadFixture("production_plan.md"), "HalfNut ELS");
+
+        var eS = await context.Assets.Include(a => a.AssetType).SingleAsync(a => a.Code == "E-S");
+        var a01 = await context.Assets.Include(a => a.AssetType).SingleAsync(a => a.Code == "A-01");
+        Assert.Equal("PieceToCamera", eS.AssetType!.Name);
+        Assert.Equal("Shot", a01.AssetType!.Name);
+    }
+
+    [Fact]
+    public async Task Animation_rows_become_assets_with_no_sequence_number_and_no_beat_links()
+    {
+        await using var context = CreateInMemoryContext();
+        var mapper = new ImportMapper(context);
+
+        await mapper.ImportAsync(LoadFixture("storyboard.html"), LoadFixture("production_plan.md"), "HalfNut ELS");
+
+        var g1 = await context.Assets
+            .Include(a => a.AssetBeats)
+            .Include(a => a.AssetType)
+            .SingleAsync(a => a.Code == "g1_gears");
+        Assert.Equal("Animation", g1.AssetType!.Name);
+        Assert.Null(g1.SequenceNumber);
+        Assert.Empty(g1.AssetBeats);
+    }
+}
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+dotnet test tests/ProductionBible.Importer.Tests --filter ImportMapperTests
+```
+
+Expected: FAIL to compile — `ImportMapper` does not exist yet.
+
+- [ ] **Step 3: Write `ImportMapper`**
+
+`src/ProductionBible.Importer/ImportMapper.cs`:
+
+```csharp
+using System.Text.RegularExpressions;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Entities;
+
+namespace ProductionBible.Importer;
+
+public class ImportMapper
+{
+    private readonly ProductionBibleDbContext _db;
+    private readonly Dictionary<int, Episode> _episodesByNumber = new();
+    private readonly Dictionary<string, AssetType> _assetTypesByName = new();
+    private readonly Dictionary<(int episodeNumber, string timecode), Beat> _beatsByKey = new();
+
+    public ImportMapper(ProductionBibleDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task<Project> ImportAsync(string storyboardHtml, string productionPlanMarkdown, string projectName)
+    {
+        var (shotRows, animationRows) = StoryboardHtmlParser.Parse(storyboardHtml);
+        var shotPages = ProductionPlanMarkdownParser.Parse(productionPlanMarkdown);
+        var shotRowsByCode = shotRows.ToDictionary(r => r.Code, r => r);
+
+        var project = new Project { Name = projectName };
+        _db.Projects.Add(project);
+
+        var shotType = GetOrCreateAssetType("Shot");
+        var pieceToCameraType = GetOrCreateAssetType("PieceToCamera");
+
+        var matchedCodes = new HashSet<string>();
+        foreach (var page in shotPages)
+        {
+            var assetType = page.Code.StartsWith("E-", StringComparison.Ordinal) ? pieceToCameraType : shotType;
+            var episode = GetOrCreateEpisode(project, page.EpisodeNumber);
+
+            var asset = new Asset
+            {
+                Episode = episode,
+                AssetType = assetType,
+                Code = page.Code,
+                Title = page.Title,
+                ScriptText = page.ScriptText,
+                Status = "Planned",
+                SequenceNumber = page.SequenceNumber,
+            };
+
+            AddAttribute(asset, "Location", page.Location);
+            AddAttribute(asset, "SceneSetup", page.SceneSetup);
+            AddAttribute(asset, "AngleAndCamera", page.AngleAndCamera);
+            AddAttribute(asset, "AudioNotes", page.AudioNotes);
+            AddAttribute(asset, "TargetLengthRaw", page.TargetLengthRaw);
+            AddAttribute(asset, "AdditionalConsiderations", page.AdditionalConsiderations);
+            AddAttribute(asset, "PhaseGroup", page.PhaseGroup);
+
+            if (shotRowsByCode.TryGetValue(page.Code, out var shotRow))
+            {
+                matchedCodes.Add(page.Code);
+                AddAttribute(asset, "CaptureNote", shotRow.CaptureNote);
+                AddAttribute(asset, "StoryboardMachineConfig", shotRow.SceneSetup);
+                AddAttribute(asset, "StoryboardSetupSection", shotRow.SetupSection);
+            }
+
+            _db.Assets.Add(asset);
+
+            foreach (var timecode in page.Timecodes)
+            {
+                var beat = GetOrCreateBeat(project, page.EpisodeNumber, timecode, page.Title);
+                _db.AssetBeats.Add(new AssetBeat { Asset = asset, Beat = beat });
+            }
+        }
+
+        foreach (var unmatchedCode in shotRowsByCode.Keys.Except(matchedCodes))
+        {
+            Console.WriteLine(
+                $"Warning: storyboard.html shot row '{unmatchedCode}' has no matching production_plan.md page; skipped.");
+        }
+
+        var animationType = GetOrCreateAssetType("Animation");
+        var titleType = GetOrCreateAssetType("Title");
+
+        foreach (var row in animationRows)
+        {
+            var episodeMatch = Regex.Match(row.Description, @"EP\s*(?<ep>\d+)");
+            if (!episodeMatch.Success)
+            {
+                Console.WriteLine($"Warning: animation row '{row.Code}' has no identifiable episode; skipped.");
+                continue;
+            }
+
+            var episode = GetOrCreateEpisode(project, int.Parse(episodeMatch.Groups["ep"].Value));
+            var isTitle = Regex.IsMatch(row.Code, @"^(t\d+_title|l\d+_)");
+
+            var asset = new Asset
+            {
+                Episode = episode,
+                AssetType = isTitle ? titleType : animationType,
+                Code = row.Code,
+                Title = row.Code,
+                Status = "Planned",
+                TargetLengthSeconds = row.DurationSeconds,
+                Notes = row.Description,
+            };
+            AddAttribute(asset, "SourceScriptRef", row.Code);
+            _db.Assets.Add(asset);
+        }
+
+        await _db.SaveChangesAsync();
+        return project;
+    }
+
+    private Episode GetOrCreateEpisode(Project project, int number)
+    {
+        if (_episodesByNumber.TryGetValue(number, out var existing)) return existing;
+        var episode = new Episode { Project = project, Name = $"EP{number}", OrderIndex = number };
+        _episodesByNumber[number] = episode;
+        _db.Episodes.Add(episode);
+        return episode;
+    }
+
+    private AssetType GetOrCreateAssetType(string name)
+    {
+        if (_assetTypesByName.TryGetValue(name, out var existing)) return existing;
+        var type = new AssetType { Name = name };
+        _assetTypesByName[name] = type;
+        _db.AssetTypes.Add(type);
+        return type;
+    }
+
+    private Beat GetOrCreateBeat(Project project, int episodeNumber, string timecode, string purpose)
+    {
+        var key = (episodeNumber, timecode);
+        if (_beatsByKey.TryGetValue(key, out var existing)) return existing;
+        var episode = GetOrCreateEpisode(project, episodeNumber);
+        var beat = new Beat { Episode = episode, Timecode = timecode, Purpose = purpose };
+        _beatsByKey[key] = beat;
+        _db.Beats.Add(beat);
+        return beat;
+    }
+
+    private static void AddAttribute(Asset asset, string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        asset.Attributes.Add(new AssetAttribute { Asset = asset, Key = key, Value = value });
+    }
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+```bash
+dotnet test tests/ProductionBible.Importer.Tests --filter ImportMapperTests
+```
+
+Expected: PASS, 4 tests.
+
+- [ ] **Step 5: Write the console entry point**
+
+`src/ProductionBible.Importer/Program.cs` (replace the template's generated content):
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Importer;
+
+if (args.Length < 3)
+{
+    Console.WriteLine("Usage: ProductionBible.Importer <storyboard.html path> <production_plan.md path> <sqlite db path>");
+    return 1;
+}
+
+var storyboardHtml = await File.ReadAllTextAsync(args[0]);
+var productionPlanMarkdown = await File.ReadAllTextAsync(args[1]);
+
+var options = new DbContextOptionsBuilder<ProductionBibleDbContext>()
+    .UseSqlite($"Data Source={args[2]}")
+    .Options;
+
+await using var db = new ProductionBibleDbContext(options);
+await db.Database.MigrateAsync();
+
+var mapper = new ImportMapper(db);
+var project = await mapper.ImportAsync(storyboardHtml, productionPlanMarkdown, "HalfNut ELS");
+
+Console.WriteLine($"Imported project '{project.Name}' (id {project.Id}).");
+return 0;
+```
+
+- [ ] **Step 6: Run the whole solution's test suite**
+
+```bash
+dotnet test ProductionBible.sln
+```
+
+Expected: PASS — every .NET test from Tasks 1-15.
+
+- [ ] **Step 7: Manually run the importer against the real files into a throwaway database**
+
+```bash
+dotnet run --project src/ProductionBible.Importer -- \
+  "D:\Data\source\HalfNutELS-Video\storyboard.html" \
+  "D:\Data\source\HalfNutELS-Video\production_plan.md" \
+  ./halfnutels_seed.db
+```
+
+Expected: prints `Imported project 'HalfNut ELS' (id 1).`, plus any `Warning:` lines for unmatched shot rows or unidentifiable animation episodes — read them; they are real signal about what the parsers missed, not noise to suppress. Delete `halfnutels_seed.db` afterward — Task 16 does the real seed import into the app's actual database.
+
+```bash
+rm halfnutels_seed.db
+```
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add -A
+git commit -m "Add ImportMapper and Importer console entry point
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
