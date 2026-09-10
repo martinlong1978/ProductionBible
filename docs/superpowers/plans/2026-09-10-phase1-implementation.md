@@ -1475,3 +1475,312 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 6: Beat resource — DTOs, service, controller
+
+**Files:**
+- Create: `src/ProductionBible.Application/Dtos/BeatDtos.cs`
+- Create: `src/ProductionBible.Application/Services/IBeatService.cs`
+- Create: `src/ProductionBible.Application/Services/BeatService.cs`
+- Create: `src/ProductionBible.Api/Controllers/BeatsController.cs`
+- Test: `tests/ProductionBible.Application.Tests/BeatServiceTests.cs`
+
+**Interfaces:**
+- Consumes: `ProductionBibleDbContext`, `Episode` entity (Task 2).
+- Produces: `IBeatService` with `GetByEpisodeAsync(int episodeId)`, `GetByIdAsync(int id)`, `CreateAsync(int episodeId, CreateBeatRequest)`, `UpdateAsync(int id, UpdateBeatRequest)`, `DeleteAsync(int id)`. `BeatDto` includes `AssetIds` (populated via `AssetBeat`, Task 2) so Task 7's Asset↔Beat linking has something to read; Beat itself never writes `AssetBeat` rows — only `AssetService` (Task 7) does, since the link is created from the Asset side (`CreateAssetRequest.BeatIds`).
+
+- [ ] **Step 1: Write the DTOs**
+
+`src/ProductionBible.Application/Dtos/BeatDtos.cs`:
+
+```csharp
+namespace ProductionBible.Application.Dtos;
+
+public record BeatDto(int Id, int EpisodeId, string Timecode, string Purpose, int[] AssetIds);
+
+public record CreateBeatRequest(string Timecode, string Purpose);
+
+public record UpdateBeatRequest(string Timecode, string Purpose);
+```
+
+- [ ] **Step 2: Write the failing service test**
+
+`tests/ProductionBible.Application.Tests/BeatServiceTests.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Entities;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Application.Tests;
+
+public class BeatServiceTests
+{
+    private static ProductionBibleDbContext CreateInMemoryContext()
+    {
+        var options = new DbContextOptionsBuilder<ProductionBibleDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new ProductionBibleDbContext(options);
+    }
+
+    private static async Task<int> SeedEpisodeAsync(ProductionBibleDbContext context)
+    {
+        var project = new Project { Name = "HalfNut ELS" };
+        var episode = new Episode { Project = project, Name = "EP1", OrderIndex = 1 };
+        context.Episodes.Add(episode);
+        await context.SaveChangesAsync();
+        return episode.Id;
+    }
+
+    [Fact]
+    public async Task CreateAsync_then_GetByIdAsync_round_trips_the_beat()
+    {
+        await using var context = CreateInMemoryContext();
+        var episodeId = await SeedEpisodeAsync(context);
+        var service = new BeatService(context);
+
+        var created = await service.CreateAsync(episodeId, new CreateBeatRequest("00:00", "Cold open"));
+
+        var fetched = await service.GetByIdAsync(created.Id);
+        Assert.NotNull(fetched);
+        Assert.Equal("00:00", fetched!.Timecode);
+        Assert.Equal("Cold open", fetched.Purpose);
+        Assert.Empty(fetched.AssetIds);
+    }
+
+    [Fact]
+    public async Task GetByEpisodeAsync_returns_beats_for_that_episode_only()
+    {
+        await using var context = CreateInMemoryContext();
+        var episodeAId = await SeedEpisodeAsync(context);
+        var episodeBId = await SeedEpisodeAsync(context);
+        var service = new BeatService(context);
+        await service.CreateAsync(episodeAId, new CreateBeatRequest("00:00", "Cold open"));
+        await service.CreateAsync(episodeBId, new CreateBeatRequest("00:00", "Different episode"));
+
+        var beats = await service.GetByEpisodeAsync(episodeAId);
+
+        Assert.Single(beats);
+        Assert.Equal("Cold open", beats[0].Purpose);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_includes_linked_asset_ids()
+    {
+        await using var context = CreateInMemoryContext();
+        var episodeId = await SeedEpisodeAsync(context);
+        var assetType = new AssetType { Name = "Shot" };
+        context.AssetTypes.Add(assetType);
+        var beat = new Beat { EpisodeId = episodeId, Timecode = "00:00", Purpose = "Cold open" };
+        context.Beats.Add(beat);
+        var asset = new Asset { EpisodeId = episodeId, AssetType = assetType, Code = "A-01", Title = "Entry" };
+        context.Assets.Add(asset);
+        await context.SaveChangesAsync();
+        context.AssetBeats.Add(new AssetBeat { AssetId = asset.Id, BeatId = beat.Id });
+        await context.SaveChangesAsync();
+
+        var service = new BeatService(context);
+        var fetched = await service.GetByIdAsync(beat.Id);
+
+        Assert.NotNull(fetched);
+        Assert.Equal(new[] { asset.Id }, fetched!.AssetIds);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_removes_the_beat()
+    {
+        await using var context = CreateInMemoryContext();
+        var episodeId = await SeedEpisodeAsync(context);
+        var service = new BeatService(context);
+        var created = await service.CreateAsync(episodeId, new CreateBeatRequest("00:00", "Cold open"));
+
+        var deleted = await service.DeleteAsync(created.Id);
+
+        Assert.True(deleted);
+        Assert.Null(await service.GetByIdAsync(created.Id));
+    }
+}
+```
+
+- [ ] **Step 3: Run the tests to verify they fail**
+
+```bash
+dotnet test tests/ProductionBible.Application.Tests --filter BeatServiceTests
+```
+
+Expected: FAIL to compile — `IBeatService`/`BeatService` don't exist yet.
+
+- [ ] **Step 4: Write the service interface and implementation**
+
+`src/ProductionBible.Application/Services/IBeatService.cs`:
+
+```csharp
+using ProductionBible.Application.Dtos;
+
+namespace ProductionBible.Application.Services;
+
+public interface IBeatService
+{
+    Task<IReadOnlyList<BeatDto>> GetByEpisodeAsync(int episodeId);
+    Task<BeatDto?> GetByIdAsync(int id);
+    Task<BeatDto> CreateAsync(int episodeId, CreateBeatRequest request);
+    Task<BeatDto?> UpdateAsync(int id, UpdateBeatRequest request);
+    Task<bool> DeleteAsync(int id);
+}
+```
+
+`src/ProductionBible.Application/Services/BeatService.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Entities;
+
+namespace ProductionBible.Application.Services;
+
+public class BeatService : IBeatService
+{
+    private readonly ProductionBibleDbContext _db;
+
+    public BeatService(ProductionBibleDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task<IReadOnlyList<BeatDto>> GetByEpisodeAsync(int episodeId)
+    {
+        return await _db.Beats
+            .Where(b => b.EpisodeId == episodeId)
+            .Select(b => new BeatDto(
+                b.Id, b.EpisodeId, b.Timecode, b.Purpose,
+                b.AssetBeats.Select(ab => ab.AssetId).ToArray()))
+            .ToListAsync();
+    }
+
+    public async Task<BeatDto?> GetByIdAsync(int id)
+    {
+        return await _db.Beats
+            .Where(b => b.Id == id)
+            .Select(b => new BeatDto(
+                b.Id, b.EpisodeId, b.Timecode, b.Purpose,
+                b.AssetBeats.Select(ab => ab.AssetId).ToArray()))
+            .SingleOrDefaultAsync();
+    }
+
+    public async Task<BeatDto> CreateAsync(int episodeId, CreateBeatRequest request)
+    {
+        var beat = new Beat { EpisodeId = episodeId, Timecode = request.Timecode, Purpose = request.Purpose };
+        _db.Beats.Add(beat);
+        await _db.SaveChangesAsync();
+        return new BeatDto(beat.Id, beat.EpisodeId, beat.Timecode, beat.Purpose, Array.Empty<int>());
+    }
+
+    public async Task<BeatDto?> UpdateAsync(int id, UpdateBeatRequest request)
+    {
+        var beat = await _db.Beats.FindAsync(id);
+        if (beat is null) return null;
+
+        beat.Timecode = request.Timecode;
+        beat.Purpose = request.Purpose;
+        await _db.SaveChangesAsync();
+        return await GetByIdAsync(id);
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var beat = await _db.Beats.FindAsync(id);
+        if (beat is null) return false;
+
+        _db.Beats.Remove(beat);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+}
+```
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+```bash
+dotnet test tests/ProductionBible.Application.Tests --filter BeatServiceTests
+```
+
+Expected: PASS, 4 tests.
+
+- [ ] **Step 6: Write the controller**
+
+`src/ProductionBible.Api/Controllers/BeatsController.cs`:
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Api.Controllers;
+
+[ApiController]
+public class BeatsController : ControllerBase
+{
+    private readonly IBeatService _service;
+
+    public BeatsController(IBeatService service)
+    {
+        _service = service;
+    }
+
+    [HttpGet("api/episodes/{episodeId:int}/beats")]
+    public async Task<ActionResult<IReadOnlyList<BeatDto>>> GetByEpisode(int episodeId)
+        => Ok(await _service.GetByEpisodeAsync(episodeId));
+
+    [HttpGet("api/beats/{id:int}")]
+    public async Task<ActionResult<BeatDto>> GetById(int id)
+    {
+        var beat = await _service.GetByIdAsync(id);
+        return beat is null ? NotFound() : Ok(beat);
+    }
+
+    [HttpPost("api/episodes/{episodeId:int}/beats")]
+    public async Task<ActionResult<BeatDto>> Create(int episodeId, CreateBeatRequest request)
+    {
+        var created = await _service.CreateAsync(episodeId, request);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    [HttpPut("api/beats/{id:int}")]
+    public async Task<ActionResult<BeatDto>> Update(int id, UpdateBeatRequest request)
+    {
+        var updated = await _service.UpdateAsync(id, request);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("api/beats/{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var deleted = await _service.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
+    }
+}
+```
+
+- [ ] **Step 7: Build to verify the controller compiles**
+
+```bash
+dotnet build src/ProductionBible.Api
+```
+
+Expected: builds.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add -A
+git commit -m "Add Beat CRUD: service, controller, and service tests
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
