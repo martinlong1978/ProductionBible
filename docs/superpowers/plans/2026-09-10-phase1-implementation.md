@@ -597,3 +597,312 @@ EOF
 ```
 
 ---
+
+### Task 3: Project resource — DTOs, service, controller
+
+This task establishes the CRUD pattern every later resource (Episode, AssetType, Beat, Asset) repeats: a `Dtos` file, an `I<X>Service`/`<X>Service` pair operating on DTOs (never leaking EF entities past the service layer), and a thin controller.
+
+**Files:**
+- Create: `src/ProductionBible.Application/Dtos/ProjectDtos.cs`
+- Create: `src/ProductionBible.Application/Services/IProjectService.cs`
+- Create: `src/ProductionBible.Application/Services/ProjectService.cs`
+- Create: `src/ProductionBible.Api/Controllers/ProjectsController.cs`
+- Test: `tests/ProductionBible.Application.Tests/ProjectServiceTests.cs`
+
+**Interfaces:**
+- Consumes: `ProductionBibleDbContext` (Task 2).
+- Produces: `IProjectService` with `GetAllAsync()`, `GetByIdAsync(int id)`, `CreateAsync(CreateProjectRequest)`, `UpdateAsync(int id, UpdateProjectRequest)`, `DeleteAsync(int id)`. This exact method-name pattern (`GetAllAsync`/`GetByIdAsync`/`CreateAsync`/`UpdateAsync`/`DeleteAsync`) is reused by every later service interface.
+
+- [ ] **Step 1: Write the DTOs**
+
+`src/ProductionBible.Application/Dtos/ProjectDtos.cs`:
+
+```csharp
+namespace ProductionBible.Application.Dtos;
+
+public record ProjectDto(int Id, string Name, string? Description);
+
+public record CreateProjectRequest(string Name, string? Description);
+
+public record UpdateProjectRequest(string Name, string? Description);
+```
+
+- [ ] **Step 2: Write the failing service test**
+
+`tests/ProductionBible.Application.Tests/ProjectServiceTests.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Application.Tests;
+
+public class ProjectServiceTests
+{
+    private static ProductionBibleDbContext CreateInMemoryContext()
+    {
+        var options = new DbContextOptionsBuilder<ProductionBibleDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new ProductionBibleDbContext(options);
+    }
+
+    [Fact]
+    public async Task CreateAsync_then_GetByIdAsync_round_trips_the_project()
+    {
+        await using var context = CreateInMemoryContext();
+        var service = new ProjectService(context);
+
+        var created = await service.CreateAsync(new CreateProjectRequest("HalfNut ELS", "The lathe series"));
+
+        Assert.True(created.Id > 0);
+        Assert.Equal("HalfNut ELS", created.Name);
+
+        var fetched = await service.GetByIdAsync(created.Id);
+        Assert.NotNull(fetched);
+        Assert.Equal("HalfNut ELS", fetched!.Name);
+        Assert.Equal("The lathe series", fetched.Description);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_returns_null_for_unknown_id()
+    {
+        await using var context = CreateInMemoryContext();
+        var service = new ProjectService(context);
+
+        var result = await service.GetByIdAsync(999);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_returns_every_project()
+    {
+        await using var context = CreateInMemoryContext();
+        var service = new ProjectService(context);
+        await service.CreateAsync(new CreateProjectRequest("Project One", null));
+        await service.CreateAsync(new CreateProjectRequest("Project Two", null));
+
+        var all = await service.GetAllAsync();
+
+        Assert.Equal(2, all.Count);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_changes_name_and_description()
+    {
+        await using var context = CreateInMemoryContext();
+        var service = new ProjectService(context);
+        var created = await service.CreateAsync(new CreateProjectRequest("Old Name", null));
+
+        var updated = await service.UpdateAsync(created.Id, new UpdateProjectRequest("New Name", "New description"));
+
+        Assert.NotNull(updated);
+        Assert.Equal("New Name", updated!.Name);
+        Assert.Equal("New description", updated.Description);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_removes_the_project_and_returns_true()
+    {
+        await using var context = CreateInMemoryContext();
+        var service = new ProjectService(context);
+        var created = await service.CreateAsync(new CreateProjectRequest("To Delete", null));
+
+        var deleted = await service.DeleteAsync(created.Id);
+        var fetched = await service.GetByIdAsync(created.Id);
+
+        Assert.True(deleted);
+        Assert.Null(fetched);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_returns_false_for_unknown_id()
+    {
+        await using var context = CreateInMemoryContext();
+        var service = new ProjectService(context);
+
+        var deleted = await service.DeleteAsync(999);
+
+        Assert.False(deleted);
+    }
+}
+```
+
+- [ ] **Step 3: Run the tests to verify they fail**
+
+```bash
+dotnet test tests/ProductionBible.Application.Tests --filter ProjectServiceTests
+```
+
+Expected: FAIL to compile — `IProjectService`/`ProjectService` don't exist yet.
+
+- [ ] **Step 4: Write the service interface and implementation**
+
+`src/ProductionBible.Application/Services/IProjectService.cs`:
+
+```csharp
+using ProductionBible.Application.Dtos;
+
+namespace ProductionBible.Application.Services;
+
+public interface IProjectService
+{
+    Task<IReadOnlyList<ProjectDto>> GetAllAsync();
+    Task<ProjectDto?> GetByIdAsync(int id);
+    Task<ProjectDto> CreateAsync(CreateProjectRequest request);
+    Task<ProjectDto?> UpdateAsync(int id, UpdateProjectRequest request);
+    Task<bool> DeleteAsync(int id);
+}
+```
+
+`src/ProductionBible.Application/Services/ProjectService.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Entities;
+
+namespace ProductionBible.Application.Services;
+
+public class ProjectService : IProjectService
+{
+    private readonly ProductionBibleDbContext _db;
+
+    public ProjectService(ProductionBibleDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task<IReadOnlyList<ProjectDto>> GetAllAsync()
+    {
+        return await _db.Projects
+            .Select(p => new ProjectDto(p.Id, p.Name, p.Description))
+            .ToListAsync();
+    }
+
+    public async Task<ProjectDto?> GetByIdAsync(int id)
+    {
+        var project = await _db.Projects.FindAsync(id);
+        return project is null ? null : new ProjectDto(project.Id, project.Name, project.Description);
+    }
+
+    public async Task<ProjectDto> CreateAsync(CreateProjectRequest request)
+    {
+        var project = new Project { Name = request.Name, Description = request.Description };
+        _db.Projects.Add(project);
+        await _db.SaveChangesAsync();
+        return new ProjectDto(project.Id, project.Name, project.Description);
+    }
+
+    public async Task<ProjectDto?> UpdateAsync(int id, UpdateProjectRequest request)
+    {
+        var project = await _db.Projects.FindAsync(id);
+        if (project is null) return null;
+
+        project.Name = request.Name;
+        project.Description = request.Description;
+        await _db.SaveChangesAsync();
+        return new ProjectDto(project.Id, project.Name, project.Description);
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var project = await _db.Projects.FindAsync(id);
+        if (project is null) return false;
+
+        _db.Projects.Remove(project);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+}
+```
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+```bash
+dotnet test tests/ProductionBible.Application.Tests --filter ProjectServiceTests
+```
+
+Expected: PASS, 6 tests.
+
+- [ ] **Step 6: Write the controller**
+
+`src/ProductionBible.Api/Controllers/ProjectsController.cs`:
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Api.Controllers;
+
+[ApiController]
+[Route("api/projects")]
+public class ProjectsController : ControllerBase
+{
+    private readonly IProjectService _service;
+
+    public ProjectsController(IProjectService service)
+    {
+        _service = service;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<ProjectDto>>> GetAll()
+        => Ok(await _service.GetAllAsync());
+
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<ProjectDto>> GetById(int id)
+    {
+        var project = await _service.GetByIdAsync(id);
+        return project is null ? NotFound() : Ok(project);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<ProjectDto>> Create(CreateProjectRequest request)
+    {
+        var created = await _service.CreateAsync(request);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<ProjectDto>> Update(int id, UpdateProjectRequest request)
+    {
+        var updated = await _service.UpdateAsync(id, request);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var deleted = await _service.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
+    }
+}
+```
+
+Note: this controller is not runnable end-to-end yet — `Program.cs` does not register `IProjectService` or the DbContext in DI until Task 8. That is expected; Task 8's smoke test is what proves the wiring.
+
+- [ ] **Step 7: Build to verify the controller compiles**
+
+```bash
+dotnet build src/ProductionBible.Api
+```
+
+Expected: builds (controller compiles against the service interface; DI registration comes later).
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add -A
+git commit -m "Add Project CRUD: service, controller, and service tests
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
