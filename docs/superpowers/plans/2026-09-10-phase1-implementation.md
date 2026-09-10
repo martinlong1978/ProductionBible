@@ -1784,3 +1784,447 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 7: Asset resource — DTOs, service, controller (attributes + beat links)
+
+This is the most complex resource: every create/update carries a full `Attributes` dictionary and `BeatIds` array, and the service must replace (not merge) both on every write, matching PUT-style full-replace semantics.
+
+**Files:**
+- Create: `src/ProductionBible.Application/Dtos/AssetDtos.cs`
+- Create: `src/ProductionBible.Application/Services/IAssetService.cs`
+- Create: `src/ProductionBible.Application/Services/AssetService.cs`
+- Create: `src/ProductionBible.Api/Controllers/AssetsController.cs`
+- Test: `tests/ProductionBible.Application.Tests/AssetServiceTests.cs`
+
+**Interfaces:**
+- Consumes: `ProductionBibleDbContext`, `Asset`/`AssetAttribute`/`AssetBeat`/`AssetType` entities (Task 2).
+- Produces: `IAssetService` with `GetByEpisodeAsync(int episodeId)`, `GetByIdAsync(int id)`, `CreateAsync(int episodeId, CreateAssetRequest)`, `UpdateAsync(int id, UpdateAssetRequest)`, `DeleteAsync(int id)`. `AssetDto.Attributes` is `Dictionary<string,string>`; `AssetDto.BeatIds` is `int[]`. This is the exact shape Task 13-15 (Importer) will construct when writing seed data, and the exact shape Phase 2's MCP tools will read/write.
+
+- [ ] **Step 1: Write the DTOs**
+
+`src/ProductionBible.Application/Dtos/AssetDtos.cs`:
+
+```csharp
+namespace ProductionBible.Application.Dtos;
+
+public record AssetDto(
+    int Id,
+    int EpisodeId,
+    int AssetTypeId,
+    string AssetTypeName,
+    string Code,
+    string Title,
+    string? ScriptText,
+    string Status,
+    string? Notes,
+    int? SequenceNumber,
+    int? TargetLengthSeconds,
+    DateTime? CompletedAtUtc,
+    Dictionary<string, string> Attributes,
+    int[] BeatIds);
+
+public record CreateAssetRequest(
+    int AssetTypeId,
+    string Code,
+    string Title,
+    string? ScriptText,
+    string Status,
+    string? Notes,
+    int? SequenceNumber,
+    int? TargetLengthSeconds,
+    Dictionary<string, string>? Attributes,
+    int[]? BeatIds);
+
+public record UpdateAssetRequest(
+    int AssetTypeId,
+    string Code,
+    string Title,
+    string? ScriptText,
+    string Status,
+    string? Notes,
+    int? SequenceNumber,
+    int? TargetLengthSeconds,
+    Dictionary<string, string>? Attributes,
+    int[]? BeatIds);
+```
+
+- [ ] **Step 2: Write the failing service test**
+
+`tests/ProductionBible.Application.Tests/AssetServiceTests.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Entities;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Application.Tests;
+
+public class AssetServiceTests
+{
+    private static ProductionBibleDbContext CreateInMemoryContext()
+    {
+        var options = new DbContextOptionsBuilder<ProductionBibleDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new ProductionBibleDbContext(options);
+    }
+
+    private static async Task<(int episodeId, int assetTypeId, int beatId)> SeedAsync(ProductionBibleDbContext context)
+    {
+        var project = new Project { Name = "HalfNut ELS" };
+        var episode = new Episode { Project = project, Name = "EP1", OrderIndex = 1 };
+        var assetType = new AssetType { Name = "Shot" };
+        var beat = new Beat { Episode = episode, Timecode = "00:00", Purpose = "Cold open" };
+        context.Episodes.Add(episode);
+        context.AssetTypes.Add(assetType);
+        context.Beats.Add(beat);
+        await context.SaveChangesAsync();
+        return (episode.Id, assetType.Id, beat.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_stores_attributes_and_beat_links()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, beatId) = await SeedAsync(context);
+        var service = new AssetService(context);
+
+        var created = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            AssetTypeId: assetTypeId,
+            Code: "A-01",
+            Title: "Tool entering the work",
+            ScriptText: null,
+            Status: "Planned",
+            Notes: null,
+            SequenceNumber: 1,
+            TargetLengthSeconds: null,
+            Attributes: new Dictionary<string, string> { ["SceneSetup"] = "Steel bar, ~25mm" },
+            BeatIds: new[] { beatId }));
+
+        var fetched = await service.GetByIdAsync(created.Id);
+        Assert.NotNull(fetched);
+        Assert.Equal("A-01", fetched!.Code);
+        Assert.Equal("Shot", fetched.AssetTypeName);
+        Assert.Equal("Steel bar, ~25mm", fetched.Attributes["SceneSetup"]);
+        Assert.Equal(new[] { beatId }, fetched.BeatIds);
+    }
+
+    [Fact]
+    public async Task GetByEpisodeAsync_returns_assets_for_that_episode_only()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, _) = await SeedAsync(context);
+        var otherEpisode = new Episode { ProjectId = (await context.Episodes.FindAsync(episodeId))!.ProjectId, Name = "EP2", OrderIndex = 2 };
+        context.Episodes.Add(otherEpisode);
+        await context.SaveChangesAsync();
+        var service = new AssetService(context);
+        await service.CreateAsync(episodeId, MinimalRequest(assetTypeId, "A-01"));
+        await service.CreateAsync(otherEpisode.Id, MinimalRequest(assetTypeId, "B-01"));
+
+        var assets = await service.GetByEpisodeAsync(episodeId);
+
+        Assert.Single(assets);
+        Assert.Equal("A-01", assets[0].Code);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_replaces_attributes_and_beat_links_rather_than_merging()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, beatId) = await SeedAsync(context);
+        var service = new AssetService(context);
+        var created = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-01", "Original title", null, "Planned", null, 1, null,
+            new Dictionary<string, string> { ["SceneSetup"] = "Original setup" },
+            new[] { beatId }));
+
+        var updated = await service.UpdateAsync(created.Id, new UpdateAssetRequest(
+            assetTypeId, "A-01", "Updated title", null, "Shot", null, 1, null,
+            new Dictionary<string, string> { ["AngleAndCamera"] = "Macro on the tool" },
+            Array.Empty<int>()));
+
+        Assert.NotNull(updated);
+        Assert.Equal("Updated title", updated!.Title);
+        Assert.Equal("Shot", updated.Status);
+        Assert.False(updated.Attributes.ContainsKey("SceneSetup"));
+        Assert.Equal("Macro on the tool", updated.Attributes["AngleAndCamera"]);
+        Assert.Empty(updated.BeatIds);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_removes_the_asset_and_its_attributes()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, beatId) = await SeedAsync(context);
+        var service = new AssetService(context);
+        var created = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-01", "Title", null, "Planned", null, null, null,
+            new Dictionary<string, string> { ["SceneSetup"] = "Setup" },
+            new[] { beatId }));
+
+        var deleted = await service.DeleteAsync(created.Id);
+
+        Assert.True(deleted);
+        Assert.Null(await service.GetByIdAsync(created.Id));
+        Assert.Empty(context.AssetAttributes.Where(a => a.AssetId == created.Id));
+    }
+
+    private static CreateAssetRequest MinimalRequest(int assetTypeId, string code) => new(
+        assetTypeId, code, code, null, "Planned", null, null, null, null, null);
+}
+```
+
+- [ ] **Step 3: Run the tests to verify they fail**
+
+```bash
+dotnet test tests/ProductionBible.Application.Tests --filter AssetServiceTests
+```
+
+Expected: FAIL to compile — `IAssetService`/`AssetService` don't exist yet.
+
+- [ ] **Step 4: Write the service interface and implementation**
+
+`src/ProductionBible.Application/Services/IAssetService.cs`:
+
+```csharp
+using ProductionBible.Application.Dtos;
+
+namespace ProductionBible.Application.Services;
+
+public interface IAssetService
+{
+    Task<IReadOnlyList<AssetDto>> GetByEpisodeAsync(int episodeId);
+    Task<AssetDto?> GetByIdAsync(int id);
+    Task<AssetDto> CreateAsync(int episodeId, CreateAssetRequest request);
+    Task<AssetDto?> UpdateAsync(int id, UpdateAssetRequest request);
+    Task<bool> DeleteAsync(int id);
+}
+```
+
+`src/ProductionBible.Application/Services/AssetService.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Entities;
+
+namespace ProductionBible.Application.Services;
+
+public class AssetService : IAssetService
+{
+    private readonly ProductionBibleDbContext _db;
+
+    public AssetService(ProductionBibleDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task<IReadOnlyList<AssetDto>> GetByEpisodeAsync(int episodeId)
+    {
+        var assets = await _db.Assets
+            .Include(a => a.AssetType)
+            .Include(a => a.Attributes)
+            .Include(a => a.AssetBeats)
+            .Where(a => a.EpisodeId == episodeId)
+            .ToListAsync();
+        return assets.Select(ToDto).ToList();
+    }
+
+    public async Task<AssetDto?> GetByIdAsync(int id)
+    {
+        var asset = await _db.Assets
+            .Include(a => a.AssetType)
+            .Include(a => a.Attributes)
+            .Include(a => a.AssetBeats)
+            .SingleOrDefaultAsync(a => a.Id == id);
+        return asset is null ? null : ToDto(asset);
+    }
+
+    public async Task<AssetDto> CreateAsync(int episodeId, CreateAssetRequest request)
+    {
+        var asset = new Asset
+        {
+            EpisodeId = episodeId,
+            AssetTypeId = request.AssetTypeId,
+            Code = request.Code,
+            Title = request.Title,
+            ScriptText = request.ScriptText,
+            Status = request.Status,
+            Notes = request.Notes,
+            SequenceNumber = request.SequenceNumber,
+            TargetLengthSeconds = request.TargetLengthSeconds,
+        };
+        ApplyAttributes(asset, request.Attributes);
+        ApplyBeatLinks(asset, request.BeatIds);
+
+        _db.Assets.Add(asset);
+        await _db.SaveChangesAsync();
+
+        return (await GetByIdAsync(asset.Id))!;
+    }
+
+    public async Task<AssetDto?> UpdateAsync(int id, UpdateAssetRequest request)
+    {
+        var asset = await _db.Assets
+            .Include(a => a.Attributes)
+            .Include(a => a.AssetBeats)
+            .SingleOrDefaultAsync(a => a.Id == id);
+        if (asset is null) return null;
+
+        asset.AssetTypeId = request.AssetTypeId;
+        asset.Code = request.Code;
+        asset.Title = request.Title;
+        asset.ScriptText = request.ScriptText;
+        asset.Status = request.Status;
+        asset.Notes = request.Notes;
+        asset.SequenceNumber = request.SequenceNumber;
+        asset.TargetLengthSeconds = request.TargetLengthSeconds;
+
+        _db.AssetAttributes.RemoveRange(asset.Attributes);
+        asset.Attributes.Clear();
+        ApplyAttributes(asset, request.Attributes);
+
+        _db.AssetBeats.RemoveRange(asset.AssetBeats);
+        asset.AssetBeats.Clear();
+        ApplyBeatLinks(asset, request.BeatIds);
+
+        await _db.SaveChangesAsync();
+        return await GetByIdAsync(id);
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var asset = await _db.Assets
+            .Include(a => a.Attributes)
+            .Include(a => a.AssetBeats)
+            .SingleOrDefaultAsync(a => a.Id == id);
+        if (asset is null) return false;
+
+        _db.AssetAttributes.RemoveRange(asset.Attributes);
+        _db.AssetBeats.RemoveRange(asset.AssetBeats);
+        _db.Assets.Remove(asset);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    private static void ApplyAttributes(Asset asset, Dictionary<string, string>? attributes)
+    {
+        if (attributes is null) return;
+        foreach (var (key, value) in attributes)
+        {
+            asset.Attributes.Add(new AssetAttribute { Asset = asset, Key = key, Value = value });
+        }
+    }
+
+    private static void ApplyBeatLinks(Asset asset, int[]? beatIds)
+    {
+        if (beatIds is null) return;
+        foreach (var beatId in beatIds)
+        {
+            asset.AssetBeats.Add(new AssetBeat { Asset = asset, BeatId = beatId });
+        }
+    }
+
+    private static AssetDto ToDto(Asset asset) => new(
+        asset.Id,
+        asset.EpisodeId,
+        asset.AssetTypeId,
+        asset.AssetType?.Name ?? "",
+        asset.Code,
+        asset.Title,
+        asset.ScriptText,
+        asset.Status,
+        asset.Notes,
+        asset.SequenceNumber,
+        asset.TargetLengthSeconds,
+        asset.CompletedAtUtc,
+        asset.Attributes.ToDictionary(a => a.Key, a => a.Value),
+        asset.AssetBeats.Select(ab => ab.BeatId).ToArray());
+}
+```
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+```bash
+dotnet test tests/ProductionBible.Application.Tests --filter AssetServiceTests
+```
+
+Expected: PASS, 4 tests.
+
+- [ ] **Step 6: Write the controller**
+
+`src/ProductionBible.Api/Controllers/AssetsController.cs`:
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Api.Controllers;
+
+[ApiController]
+public class AssetsController : ControllerBase
+{
+    private readonly IAssetService _service;
+
+    public AssetsController(IAssetService service)
+    {
+        _service = service;
+    }
+
+    [HttpGet("api/episodes/{episodeId:int}/assets")]
+    public async Task<ActionResult<IReadOnlyList<AssetDto>>> GetByEpisode(int episodeId)
+        => Ok(await _service.GetByEpisodeAsync(episodeId));
+
+    [HttpGet("api/assets/{id:int}")]
+    public async Task<ActionResult<AssetDto>> GetById(int id)
+    {
+        var asset = await _service.GetByIdAsync(id);
+        return asset is null ? NotFound() : Ok(asset);
+    }
+
+    [HttpPost("api/episodes/{episodeId:int}/assets")]
+    public async Task<ActionResult<AssetDto>> Create(int episodeId, CreateAssetRequest request)
+    {
+        var created = await _service.CreateAsync(episodeId, request);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    [HttpPut("api/assets/{id:int}")]
+    public async Task<ActionResult<AssetDto>> Update(int id, UpdateAssetRequest request)
+    {
+        var updated = await _service.UpdateAsync(id, request);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("api/assets/{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var deleted = await _service.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
+    }
+}
+```
+
+- [ ] **Step 7: Build to verify the controller compiles**
+
+```bash
+dotnet build src/ProductionBible.Api
+```
+
+Expected: builds.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add -A
+git commit -m "Add Asset CRUD: service, controller, and service tests
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
