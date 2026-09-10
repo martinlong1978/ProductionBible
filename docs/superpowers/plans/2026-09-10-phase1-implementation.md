@@ -2420,3 +2420,259 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 9: Angular workspace scaffold + typed API client service
+
+**Files:**
+- Create: `web/` (generated Angular workspace)
+- Create: `web/proxy.conf.json`
+- Create: `web/src/app/core/models.ts`
+- Create: `web/src/app/core/api-client.service.ts`
+- Test: `web/src/app/core/api-client.service.spec.ts`
+
+**Interfaces:**
+- Consumes: the REST API from Tasks 3-8 (`/api/projects`, `/api/projects/{id}/episodes`, `/api/episodes/{id}/beats`, `/api/episodes/{id}/assets`, `/api/assets/{id}`, `/api/asset-types`).
+- Produces: `ApiClientService` with `getProjects()`, `getEpisodes(projectId)`, `getBeats(episodeId)`, `getAssets(episodeId)`, `getAssetTypes()`, `updateAsset(id, request)` — all returning RxJS `Observable`s of the TypeScript interfaces in `models.ts`. Tasks 10-12 (Bible/Timeline/Production Plan views) consume this service exclusively; they never call `HttpClient` directly.
+
+- [ ] **Step 1: Scaffold the Angular workspace**
+
+From `D:\Data\source\ProductionBible`:
+
+```bash
+npx -y @angular/cli@latest new web --directory=web --routing --style=css --skip-git
+```
+
+If the CLI interactively prompts for a unit-test runner, choose **Jasmine** (the classic default — this plan's test examples use Jasmine/Karma syntax). If it prompts for AI tooling or SSR, decline both (this is a client-rendered SPA with no AI-tooling need).
+
+- [ ] **Step 2: Add a dev-server proxy so `ng serve` reaches the API**
+
+`web/proxy.conf.json`:
+
+```json
+{
+  "/api": {
+    "target": "http://localhost:5280",
+    "secure": false
+  }
+}
+```
+
+Document the dev workflow by adding a `start` script that uses it — edit `web/package.json`'s `scripts` section:
+
+```json
+"start": "ng serve --proxy-config proxy.conf.json"
+```
+
+- [ ] **Step 3: Write the TypeScript models**
+
+`web/src/app/core/models.ts`:
+
+```typescript
+export interface ProjectDto {
+  id: number;
+  name: string;
+  description: string | null;
+}
+
+export interface EpisodeDto {
+  id: number;
+  projectId: number;
+  name: string;
+  orderIndex: number;
+}
+
+export interface AssetTypeDto {
+  id: number;
+  name: string;
+}
+
+export interface BeatDto {
+  id: number;
+  episodeId: number;
+  timecode: string;
+  purpose: string;
+  assetIds: number[];
+}
+
+export interface AssetDto {
+  id: number;
+  episodeId: number;
+  assetTypeId: number;
+  assetTypeName: string;
+  code: string;
+  title: string;
+  scriptText: string | null;
+  status: string;
+  notes: string | null;
+  sequenceNumber: number | null;
+  targetLengthSeconds: number | null;
+  completedAtUtc: string | null;
+  attributes: Record<string, string>;
+  beatIds: number[];
+}
+
+export interface UpdateAssetRequest {
+  assetTypeId: number;
+  code: string;
+  title: string;
+  scriptText: string | null;
+  status: string;
+  notes: string | null;
+  sequenceNumber: number | null;
+  targetLengthSeconds: number | null;
+  attributes: Record<string, string> | null;
+  beatIds: number[] | null;
+}
+```
+
+- [ ] **Step 4: Write the failing service test**
+
+`web/src/app/core/api-client.service.spec.ts`:
+
+```typescript
+import { TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { ApiClientService } from './api-client.service';
+import { ProjectDto, AssetDto } from './models';
+
+describe('ApiClientService', () => {
+  let service: ApiClientService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [ApiClientService],
+    });
+    service = TestBed.inject(ApiClientService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+  });
+
+  it('fetches projects from /api/projects', () => {
+    const expected: ProjectDto[] = [{ id: 1, name: 'HalfNut ELS', description: null }];
+
+    service.getProjects().subscribe((projects) => {
+      expect(projects).toEqual(expected);
+    });
+
+    const req = httpMock.expectOne('/api/projects');
+    expect(req.request.method).toBe('GET');
+    req.flush(expected);
+  });
+
+  it('fetches assets for an episode from /api/episodes/{id}/assets', () => {
+    const expected: AssetDto[] = [];
+
+    service.getAssets(5).subscribe((assets) => {
+      expect(assets).toEqual(expected);
+    });
+
+    const req = httpMock.expectOne('/api/episodes/5/assets');
+    expect(req.request.method).toBe('GET');
+    req.flush(expected);
+  });
+
+  it('sends a PUT to /api/assets/{id} for updateAsset', () => {
+    service.updateAsset(7, {
+      assetTypeId: 1, code: 'A-01', title: 'Title', scriptText: null,
+      status: 'Shot', notes: 'Went well', sequenceNumber: 1, targetLengthSeconds: null,
+      attributes: null, beatIds: null,
+    }).subscribe();
+
+    const req = httpMock.expectOne('/api/assets/7');
+    expect(req.request.method).toBe('PUT');
+    req.flush({});
+  });
+});
+```
+
+- [ ] **Step 5: Run the tests to verify they fail**
+
+```bash
+cd web
+npx ng test --watch=false
+cd ..
+```
+
+Expected: FAIL to compile — `ApiClientService` does not exist yet.
+
+- [ ] **Step 6: Write the service**
+
+`web/src/app/core/api-client.service.ts`:
+
+```typescript
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { AssetDto, AssetTypeDto, BeatDto, EpisodeDto, ProjectDto, UpdateAssetRequest } from './models';
+
+@Injectable({ providedIn: 'root' })
+export class ApiClientService {
+  constructor(private readonly http: HttpClient) {}
+
+  getProjects(): Observable<ProjectDto[]> {
+    return this.http.get<ProjectDto[]>('/api/projects');
+  }
+
+  getEpisodes(projectId: number): Observable<EpisodeDto[]> {
+    return this.http.get<EpisodeDto[]>(`/api/projects/${projectId}/episodes`);
+  }
+
+  getBeats(episodeId: number): Observable<BeatDto[]> {
+    return this.http.get<BeatDto[]>(`/api/episodes/${episodeId}/beats`);
+  }
+
+  getAssets(episodeId: number): Observable<AssetDto[]> {
+    return this.http.get<AssetDto[]>(`/api/episodes/${episodeId}/assets`);
+  }
+
+  getAssetTypes(): Observable<AssetTypeDto[]> {
+    return this.http.get<AssetTypeDto[]>('/api/asset-types');
+  }
+
+  updateAsset(id: number, request: UpdateAssetRequest): Observable<AssetDto> {
+    return this.http.put<AssetDto>(`/api/assets/${id}`, request);
+  }
+}
+```
+
+- [ ] **Step 7: Register `HttpClient` in the app config**
+
+Edit `web/src/app/app.config.ts` to add `provideHttpClient()`:
+
+```typescript
+import { ApplicationConfig } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideRouter(routes), provideHttpClient()],
+};
+```
+
+- [ ] **Step 8: Run the tests to verify they pass**
+
+```bash
+cd web
+npx ng test --watch=false
+cd ..
+```
+
+Expected: PASS, 3 tests.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add -A
+git commit -m "Scaffold Angular workspace and add typed API client service
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
