@@ -108,18 +108,42 @@ Martin's correction below. This is the most significant schema decision in Phase
   palette — it needs to work for future non-HalfNut-ELS projects too. Design approach
   TBD when UI work starts (separate concern from this data/API-focused spec).
 
-## Open questions (not yet asked / not yet resolved)
+### Asset field shape (confirmed)
+- **Common table + flexible key/value attributes.** Asset carries core fields shared by
+  every type (code, type, title, script text, status, notes, sequence number, target
+  length). Type-specific fields (Shot's location/angle-camera/audio, Animation's source
+  script reference, etc.) live in an `AssetAttribute` table (`asset_id`, `key`, `value`).
+  New asset types or one-off fields need zero schema migration — matches the
+  MCP-driven, evolving-schema goal explicitly.
 
-- Schema shape for type-specific Asset fields — see "Open technical question" above.
-  Next question to ask.
-- Printable export format: keep the current HTML→PDF pipeline's look, or a fresh design?
-- MCP tool surface: full CRUD parity with the REST API, or a curated subset of tools?
-- Authoring workflow: does the app also need free-text/markdown editing capability
-  comparable to how storyboard.html / production_plan.md are edited today, or is
-  structured-field editing sufficient?
-- .NET version pin, Angular version pin, EF Core migrations strategy.
-- Error handling / validation expectations (e.g. required fields per asset type).
-- Testing approach and coverage expectations for Phase 1.
+### Authoring style (confirmed)
+- **Structured fields only for Phase 1.** Forms in the UI, typed fields via API/MCP. A
+  free-text notes field can still exist per asset, but no document-style bulk/markdown
+  editor in Phase 1.
+
+### Printable export (confirmed)
+- **Deferred to a later phase.** Phase 1 is data model + API + on-screen UI only. Print/
+  PDF export (replacing `storyboard.pdf` / `production_plan.pdf`) becomes its own small
+  phase once the data model has settled from real use.
+
+### MCP tool surface (decided, not asked — matches explicit original request)
+- **Full CRUD parity with the REST API.** The brief said "full control should be
+  possible by MCP" — no reason to curate a subset. MCP tools call the same service
+  layer as the REST controllers (per the earlier in-process hosting decision), so parity
+  is close to free.
+
+## Open questions (remaining, judgment calls to present in the full design, not separately asked)
+
+- .NET / Angular version pins — propose "latest stable LTS at implementation time"
+  rather than asserting a specific version number now (matches this project's own
+  convention of not asserting unverified facts).
+- Exact REST endpoint shapes, exact Asset/Beat/AssetAttribute field lists, exact import
+  script mapping rules from `storyboard.html` / `production_plan.md`.
+- Error handling / validation expectations.
+- Testing approach for Phase 1.
+
+**Next step:** synthesize all of the above into a full sectioned design, present in chat
+for approval, then write the final spec (this file becomes that spec once approved).
 
 ---
 
