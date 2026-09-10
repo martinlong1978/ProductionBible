@@ -2676,3 +2676,212 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 10: Bible view component (episode/timecode order, grouped by beat)
+
+**Files:**
+- Create: `web/src/app/bible/bible.component.ts`
+- Create: `web/src/app/bible/bible.component.html`
+- Test: `web/src/app/bible/bible.component.spec.ts`
+
+**Interfaces:**
+- Consumes: `ApiClientService.getProjects()`, `.getEpisodes()`, `.getBeats()`, `.getAssets()` (Task 9).
+- Produces: `BibleComponent` with public methods `selectEpisode(episodeId: number)`, `assetsForBeat(beat: BeatDto): AssetDto[]`, `toggleTimeline(): void`, and a `unassignedAssets` getter. Task 11 (Timeline toggle) renders inside this component when `viewMode === 'timeline'`, reading the same `beats`/`assets` fields this task defines.
+
+- [ ] **Step 1: Write the failing component test**
+
+`web/src/app/bible/bible.component.spec.ts`:
+
+```typescript
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
+import { BibleComponent } from './bible.component';
+import { ApiClientService } from '../core/api-client.service';
+import { AssetDto, BeatDto, EpisodeDto, ProjectDto } from '../core/models';
+
+describe('BibleComponent', () => {
+  let fixture: ComponentFixture<BibleComponent>;
+  let component: BibleComponent;
+  let apiSpy: jasmine.SpyObj<ApiClientService>;
+
+  const project: ProjectDto = { id: 1, name: 'HalfNut ELS', description: null };
+  const episode: EpisodeDto = { id: 10, projectId: 1, name: 'EP1', orderIndex: 1 };
+  const beat: BeatDto = { id: 100, episodeId: 10, timecode: '00:00', purpose: 'Cold open', assetIds: [1000] };
+  const linkedAsset: AssetDto = {
+    id: 1000, episodeId: 10, assetTypeId: 1, assetTypeName: 'Shot', code: 'A-01',
+    title: 'Tool entering the work', scriptText: null, status: 'Planned', notes: null,
+    sequenceNumber: 1, targetLengthSeconds: null, completedAtUtc: null, attributes: {}, beatIds: [100],
+  };
+  const unlinkedAsset: AssetDto = { ...linkedAsset, id: 1001, code: 'A-02', beatIds: [] };
+
+  beforeEach(async () => {
+    apiSpy = jasmine.createSpyObj('ApiClientService', ['getProjects', 'getEpisodes', 'getBeats', 'getAssets']);
+    apiSpy.getProjects.and.returnValue(of([project]));
+    apiSpy.getEpisodes.and.returnValue(of([episode]));
+    apiSpy.getBeats.and.returnValue(of([beat]));
+    apiSpy.getAssets.and.returnValue(of([linkedAsset, unlinkedAsset]));
+
+    await TestBed.configureTestingModule({
+      imports: [BibleComponent],
+      providers: [{ provide: ApiClientService, useValue: apiSpy }],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(BibleComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('loads the first episode of the first project on init', () => {
+    expect(apiSpy.getEpisodes).toHaveBeenCalledWith(1);
+    expect(component.selectedEpisodeId).toBe(10);
+    expect(component.beats).toEqual([beat]);
+  });
+
+  it('groups assets under the beat that links to them', () => {
+    expect(component.assetsForBeat(beat)).toEqual([linkedAsset]);
+  });
+
+  it('lists assets with no beat link as unassigned', () => {
+    expect(component.unassignedAssets).toEqual([unlinkedAsset]);
+  });
+
+  it('toggles view mode between list and timeline', () => {
+    expect(component.viewMode).toBe('list');
+    component.toggleTimeline();
+    expect(component.viewMode).toBe('timeline');
+    component.toggleTimeline();
+    expect(component.viewMode).toBe('list');
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+cd web
+npx ng test --watch=false
+cd ..
+```
+
+Expected: FAIL to compile — `BibleComponent` does not exist yet.
+
+- [ ] **Step 3: Write the component**
+
+`web/src/app/bible/bible.component.ts`:
+
+```typescript
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { ApiClientService } from '../core/api-client.service';
+import { AssetDto, BeatDto, EpisodeDto } from '../core/models';
+
+@Component({
+  selector: 'app-bible',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  templateUrl: './bible.component.html',
+})
+export class BibleComponent implements OnInit {
+  episodes: EpisodeDto[] = [];
+  selectedEpisodeId: number | null = null;
+  beats: BeatDto[] = [];
+  assets: AssetDto[] = [];
+  viewMode: 'list' | 'timeline' = 'list';
+
+  constructor(private readonly api: ApiClientService) {}
+
+  ngOnInit(): void {
+    this.api.getProjects().subscribe((projects) => {
+      const project = projects[0];
+      if (!project) return;
+      this.api.getEpisodes(project.id).subscribe((episodes) => {
+        this.episodes = episodes;
+        if (episodes.length > 0) {
+          this.selectEpisode(episodes[0].id);
+        }
+      });
+    });
+  }
+
+  selectEpisode(episodeId: number): void {
+    this.selectedEpisodeId = episodeId;
+    this.api.getBeats(episodeId).subscribe((beats) => (this.beats = beats));
+    this.api.getAssets(episodeId).subscribe((assets) => (this.assets = assets));
+  }
+
+  assetsForBeat(beat: BeatDto): AssetDto[] {
+    return this.assets.filter((asset) => beat.assetIds.includes(asset.id));
+  }
+
+  get unassignedAssets(): AssetDto[] {
+    const linkedIds = new Set(this.beats.flatMap((beat) => beat.assetIds));
+    return this.assets.filter((asset) => !linkedIds.has(asset.id));
+  }
+
+  toggleTimeline(): void {
+    this.viewMode = this.viewMode === 'list' ? 'timeline' : 'list';
+  }
+}
+```
+
+- [ ] **Step 4: Write the template**
+
+`web/src/app/bible/bible.component.html`:
+
+```html
+<div class="bible-view">
+  <div class="episode-picker">
+    <label for="episode-select">Episode</label>
+    <select id="episode-select" [ngModel]="selectedEpisodeId" (ngModelChange)="selectEpisode($event)">
+      <option *ngFor="let ep of episodes" [ngValue]="ep.id">{{ ep.name }}</option>
+    </select>
+    <button type="button" (click)="toggleTimeline()">
+      {{ viewMode === 'list' ? 'Show Timeline' : 'Show List' }}
+    </button>
+  </div>
+
+  <ng-container *ngIf="viewMode === 'list'">
+    <section class="beat" *ngFor="let beat of beats">
+      <h3>{{ beat.timecode }} — {{ beat.purpose }}</h3>
+      <ul>
+        <li *ngFor="let asset of assetsForBeat(beat)">
+          <strong>{{ asset.code }}</strong> — {{ asset.title }} ({{ asset.assetTypeName }}, {{ asset.status }})
+        </li>
+      </ul>
+    </section>
+    <section class="beat unassigned" *ngIf="unassignedAssets.length > 0">
+      <h3>Unassigned</h3>
+      <ul>
+        <li *ngFor="let asset of unassignedAssets">
+          <strong>{{ asset.code }}</strong> — {{ asset.title }}
+        </li>
+      </ul>
+    </section>
+  </ng-container>
+</div>
+```
+
+Task 11 replaces the bare `*ngIf="viewMode === 'list'"` container with an `else` branch rendering the timeline component — this task deliberately leaves the `viewMode === 'timeline'` case rendering nothing, since Task 11 doesn't exist yet.
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+```bash
+cd web
+npx ng test --watch=false
+cd ..
+```
+
+Expected: PASS, 4 tests.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A
+git commit -m "Add Bible view component (episode/timecode order, grouped by beat)
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
