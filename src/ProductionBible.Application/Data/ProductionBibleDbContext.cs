@@ -18,38 +18,7 @@ public class ProductionBibleDbContext : DbContext
     public DbSet<AssetAttribute> AssetAttributes => Set<AssetAttribute>();
     public DbSet<AssetBeat> AssetBeats => Set<AssetBeat>();
 
-
-    public override void Dispose()
-    {
-        try
-        {
-            Database.CloseConnection();
-        }
-        catch { }
-        finally
-        {
-            base.Dispose();
-        }
-        GC.Collect(0);
-        GC.WaitForPendingFinalizers();
-    }
-
-    public override async ValueTask DisposeAsync()
-    {
-        try
-        {
-            await Database.CloseConnectionAsync();
-        }
-        catch { }
-        finally
-        {
-            await base.DisposeAsync();
-        }
-        GC.Collect(0);
-        GC.WaitForPendingFinalizers();
-    }
-
-protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AssetBeat>(e =>
         {

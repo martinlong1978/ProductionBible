@@ -6,6 +6,5 @@ public class Project
     public string Name { get; set; } = "";
     public string? Description { get; set; }
 
-    private List<Episode>? _episodes;
-    public List<Episode> Episodes => _episodes ??= new();
+    public List<Episode> Episodes { get; set; } = new();
 }

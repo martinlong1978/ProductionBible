@@ -4,20 +4,7 @@ public class Asset
 {
     public int Id { get; set; }
     public int EpisodeId { get; set; }
-    private Episode? _episode;
-    public Episode? Episode
-    {
-        get => _episode;
-        set
-        {
-            if (_episode != value)
-            {
-                _episode = value;
-                if (value != null && !value.Assets.Contains(this))
-                    value.Assets.Add(this);
-            }
-        }
-    }
+    public Episode? Episode { get; set; }
     public int AssetTypeId { get; set; }
     public AssetType? AssetType { get; set; }
 
@@ -30,9 +17,6 @@ public class Asset
     public int? TargetLengthSeconds { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
 
-    private List<AssetAttribute>? _attributes;
-    public List<AssetAttribute> Attributes => _attributes ??= new();
-
-    private List<AssetBeat>? _assetBeats;
-    public List<AssetBeat> AssetBeats => _assetBeats ??= new();
+    public List<AssetAttribute> Attributes { get; set; } = new();
+    public List<AssetBeat> AssetBeats { get; set; } = new();
 }

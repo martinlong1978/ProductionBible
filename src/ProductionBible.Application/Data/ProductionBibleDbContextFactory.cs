@@ -7,9 +7,8 @@ public class ProductionBibleDbContextFactory : IDesignTimeDbContextFactory<Produ
 {
     public ProductionBibleDbContext CreateDbContext(string[] args)
     {
-        var connectionString = "Data Source=design_time.db";
         var options = new DbContextOptionsBuilder<ProductionBibleDbContext>()
-            .UseSqlite(connectionString)
+            .UseSqlite("Data Source=design_time.db")
             .Options;
         return new ProductionBibleDbContext(options);
     }
