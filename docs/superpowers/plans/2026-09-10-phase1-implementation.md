@@ -3638,3 +3638,225 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 14: Importer — `ProductionPlanMarkdownParser`
+
+Parses each `### CODE — Title` shot page in `production_plan.md`. This is the primary source of `SequenceNumber`, `PhaseGroup`, and — critically — the (episode, timecode) pairs Task 15 turns into `Beat` entities, because this file's per-shot meta line (`Sequence N of 65 · Phase X: Name · EPn TIMECODE [· TIMECODE...]`) is far more regular than `storyboard.html`'s dense summary row (see Task 13's rationale for not parsing that row at all).
+
+**Files:**
+- Create: `src/ProductionBible.Importer/Models/ParsedShotPage.cs`
+- Create: `src/ProductionBible.Importer/ProductionPlanMarkdownParser.cs`
+- Create: `tests/ProductionBible.Importer.Tests/Fixtures/production_plan.md` (verbatim copy)
+- Test: `tests/ProductionBible.Importer.Tests/ProductionPlanMarkdownParserTests.cs`
+
+**Interfaces:**
+- Produces: `ProductionPlanMarkdownParser.Parse(string markdown)` returning `List<ParsedShotPage>`. `ParsedShotPage(string Code, string Title, int SequenceNumber, string PhaseGroup, int EpisodeNumber, List<string> Timecodes, string? Location, string? SceneSetup, string? AngleAndCamera, string? AudioNotes, string? TargetLengthRaw, string? ScriptText, string? AdditionalConsiderations)`. Task 15 consumes this by exactly these property names, alongside `ParsedShotRow`/`ParsedAnimationRow` from Task 13.
+
+**Known limitation to verify during implementation:** this parser assumes every shot page names exactly one episode (`EP2 00:00 · 22:30` — one `EP`, one or more timecodes within it). Every page inspected so far fits this pattern; if a real page ever spans two different episodes, only the first `EP` token is captured — that page's Beats would all land on the wrong episode's timecodes for any timecode after the first `EP` switch. Not expected to occur given the shooting-order structure, but flagged rather than silently assumed correct.
+
+- [ ] **Step 1: Copy the real file as a test fixture**
+
+```bash
+cp "D:\Data\source\HalfNutELS-Video\production_plan.md" tests/ProductionBible.Importer.Tests/Fixtures/production_plan.md
+```
+
+(The `.csproj` change from Task 13 Step 1 already copies everything under `Fixtures/` to the output directory, so no further project-file edit is needed.)
+
+- [ ] **Step 2: Write the model record**
+
+`src/ProductionBible.Importer/Models/ParsedShotPage.cs`:
+
+```csharp
+namespace ProductionBible.Importer.Models;
+
+public record ParsedShotPage(
+    string Code,
+    string Title,
+    int SequenceNumber,
+    string PhaseGroup,
+    int EpisodeNumber,
+    List<string> Timecodes,
+    string? Location,
+    string? SceneSetup,
+    string? AngleAndCamera,
+    string? AudioNotes,
+    string? TargetLengthRaw,
+    string? ScriptText,
+    string? AdditionalConsiderations);
+```
+
+- [ ] **Step 3: Write the failing parser test**
+
+`tests/ProductionBible.Importer.Tests/ProductionPlanMarkdownParserTests.cs`:
+
+```csharp
+using ProductionBible.Importer;
+
+namespace ProductionBible.Importer.Tests;
+
+public class ProductionPlanMarkdownParserTests
+{
+    private static string LoadFixture() =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "production_plan.md"));
+
+    [Fact]
+    public void Parses_the_F01_shot_page_fields_from_the_real_file()
+    {
+        var pages = ProductionPlanMarkdownParser.Parse(LoadFixture());
+
+        var f01 = Assert.Single(pages, p => p.Code == "F-01");
+        Assert.Equal("The software time machine", f01.Title);
+        Assert.Equal(1, f01.SequenceNumber);
+        Assert.Equal("Phase 1: The software time machine", f01.PhaseGroup);
+        Assert.Equal(2, f01.EpisodeNumber);
+        Assert.Equal(new List<string> { "00:00", "22:30" }, f01.Timecodes);
+        Assert.Equal("Home, at the lathe", f01.Location);
+        Assert.Contains("Setup A (running)", f01.SceneSetup);
+        Assert.Contains("Macro on the first 30 mm", f01.AngleAndCamera);
+        Assert.Contains("Clean cutting sound", f01.AudioNotes);
+        Assert.Contains("10-15 min raw", f01.TargetLengthRaw);
+        Assert.Contains("No dialogue during the cut itself", f01.ScriptText);
+        Assert.Contains("This is not literally the commit before", f01.AdditionalConsiderations);
+    }
+
+    [Fact]
+    public void Parses_all_65_shot_pages()
+    {
+        var pages = ProductionPlanMarkdownParser.Parse(LoadFixture());
+
+        Assert.Equal(65, pages.Count);
+        Assert.Equal(65, pages.Select(p => p.Code).Distinct().Count());
+    }
+
+    [Fact]
+    public void Every_page_has_a_positive_sequence_number_and_at_least_one_timecode()
+    {
+        var pages = ProductionPlanMarkdownParser.Parse(LoadFixture());
+
+        Assert.All(pages, p =>
+        {
+            Assert.True(p.SequenceNumber > 0, $"{p.Code} has non-positive sequence number");
+            Assert.NotEmpty(p.Timecodes);
+        });
+    }
+}
+```
+
+- [ ] **Step 4: Run the test to verify it fails**
+
+```bash
+dotnet test tests/ProductionBible.Importer.Tests --filter ProductionPlanMarkdownParserTests
+```
+
+Expected: FAIL to compile — `ProductionPlanMarkdownParser` does not exist yet.
+
+- [ ] **Step 5: Write the parser**
+
+`src/ProductionBible.Importer/ProductionPlanMarkdownParser.cs`:
+
+```csharp
+using System.Text.RegularExpressions;
+using ProductionBible.Importer.Models;
+
+namespace ProductionBible.Importer;
+
+public static class ProductionPlanMarkdownParser
+{
+    public static List<ParsedShotPage> Parse(string markdown)
+    {
+        var pages = new List<ParsedShotPage>();
+        var chunks = Regex.Split(markdown, @"(?=^### )", RegexOptions.Multiline);
+
+        foreach (var chunk in chunks)
+        {
+            if (!chunk.TrimStart().StartsWith("### ", StringComparison.Ordinal)) continue;
+
+            var headingMatch = Regex.Match(chunk, @"^###\s+(?<code>\S+)\s+—\s+(?<title>.+?)\s*$", RegexOptions.Multiline);
+            if (!headingMatch.Success) continue;
+
+            var metaMatch = Regex.Match(
+                chunk,
+                @"<p class=""meta"">Sequence (?<seq>\d+) of \d+ &nbsp;&middot;&nbsp; Phase (?<phaseNum>\d+): (?<phaseName>[^&]+?) &nbsp;&middot;&nbsp; (?<timecodes>.+?)</p>");
+            if (!metaMatch.Success) continue;
+
+            var epMatch = Regex.Match(metaMatch.Groups["timecodes"].Value, @"EP(?<ep>\d+)\s+(?<times>.+)$");
+            var timecodes = epMatch.Success
+                ? Regex.Split(epMatch.Groups["times"].Value, @"\s*&middot;\s*")
+                    .Select(t => t.Trim())
+                    .Where(t => t.Length > 0)
+                    .ToList()
+                : new List<string>();
+            var episodeNumber = epMatch.Success ? int.Parse(epMatch.Groups["ep"].Value) : 0;
+
+            var fields = ParseFieldTable(chunk);
+
+            pages.Add(new ParsedShotPage(
+                Code: headingMatch.Groups["code"].Value.Trim(),
+                Title: headingMatch.Groups["title"].Value.Trim(),
+                SequenceNumber: int.Parse(metaMatch.Groups["seq"].Value),
+                PhaseGroup: $"Phase {metaMatch.Groups["phaseNum"].Value}: {metaMatch.Groups["phaseName"].Value.Trim()}",
+                EpisodeNumber: episodeNumber,
+                Timecodes: timecodes,
+                Location: fields.GetValueOrDefault("location"),
+                SceneSetup: fields.GetValueOrDefault("setup"),
+                AngleAndCamera: fields.GetValueOrDefault("angle & camera"),
+                AudioNotes: fields.GetValueOrDefault("audio to capture"),
+                TargetLengthRaw: fields.GetValueOrDefault("target length"),
+                ScriptText: ParseSection(chunk, "#### Script", ">"),
+                AdditionalConsiderations: ParseSection(chunk, "#### Additional considerations", "-")));
+        }
+
+        return pages;
+    }
+
+    private static Dictionary<string, string> ParseFieldTable(string chunk)
+    {
+        var fields = new Dictionary<string, string>();
+        foreach (Match m in Regex.Matches(
+            chunk, @"^\|\s*\*\*(?<key>[^*]+)\*\*\s*\|\s*(?<value>.*?)\s*\|\s*$", RegexOptions.Multiline))
+        {
+            fields[m.Groups["key"].Value.Trim().ToLowerInvariant()] = m.Groups["value"].Value.Trim();
+        }
+        return fields;
+    }
+
+    private static string? ParseSection(string chunk, string heading, string linePrefix)
+    {
+        var startIndex = chunk.IndexOf(heading, StringComparison.Ordinal);
+        if (startIndex < 0) return null;
+
+        var afterHeading = chunk[(startIndex + heading.Length)..];
+        var nextHeadingMatch = Regex.Match(afterHeading, @"^####\s", RegexOptions.Multiline);
+        var section = nextHeadingMatch.Success ? afterHeading[..nextHeadingMatch.Index] : afterHeading;
+
+        var lines = section.Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => l.StartsWith(linePrefix, StringComparison.Ordinal))
+            .Select(l => l.TrimStart(linePrefix[0]).Trim())
+            .ToList();
+
+        if (lines.Count == 0) return null;
+        return linePrefix == ">" ? string.Join(" ", lines) : string.Join("\n", lines.Select(l => $"- {l}"));
+    }
+}
+```
+
+- [ ] **Step 6: Run the test to verify it passes**
+
+```bash
+dotnet test tests/ProductionBible.Importer.Tests --filter ProductionPlanMarkdownParserTests
+```
+
+Expected: PASS, 3 tests. If `Parses_all_65_shot_pages` reports a different count, that's real signal — either the live file's page count has changed since the spec was written (re-check `production_plan.md`'s own "Sequence N of 65" numbers) or the heading/meta regex is missing a page with slightly different formatting; inspect the actual mismatch rather than adjusting the expected `65` to make the test pass.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add -A
+git commit -m "Add ProductionPlanMarkdownParser with real-file fixture tests
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
