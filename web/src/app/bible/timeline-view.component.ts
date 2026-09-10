@@ -1,6 +1,7 @@
 import { Component, Input, OnChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AssetDto, BeatDto } from '../core/models';
+import { statusPillClass } from '../core/status-style';
 
 interface TimelineLane {
   name: string;
@@ -27,6 +28,7 @@ export class TimelineViewComponent implements OnChanges {
   @Input() assets: AssetDto[] = [];
 
   lanes: TimelineLane[] = [];
+  protected readonly statusPillClass = statusPillClass;
 
   ngOnChanges(): void {
     this.lanes = this.buildLanes();

@@ -1,10 +1,15 @@
-<div class="timeline-view">
-  <div class="lane" *ngFor="let lane of lanes">
-    <h4>{{ lane.name }}</h4>
-    <div class="lane-track">
-      <div class="clip" *ngFor="let asset of lane.assets">
-        <strong>{{ asset.code }}</strong>
-        <span>{{ asset.title }}</span>
+<div class="space-y-4">
+  <div class="rounded-lg border border-border bg-surface p-4" *ngFor="let lane of lanes">
+    <h4 class="mb-3 text-sm font-semibold text-text-secondary">{{ lane.name }}</h4>
+    <div class="flex flex-wrap gap-2">
+      <div class="flex min-w-40 flex-col gap-1 rounded-md border border-border bg-bg p-3" *ngFor="let asset of lane.assets">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs text-text-secondary">{{ asset.code }}</span>
+          <span class="rounded-full px-2 py-0.5 text-[10px] font-medium text-white" [ngClass]="statusPillClass(asset.status)">
+            {{ asset.status }}
+          </span>
+        </div>
+        <span class="text-sm font-medium">{{ asset.title }}</span>
       </div>
     </div>
   </div>
