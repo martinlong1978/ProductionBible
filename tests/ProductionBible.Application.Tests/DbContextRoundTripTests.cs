@@ -39,6 +39,9 @@ public class DbContextRoundTripTests : IDisposable
             asset.AssetBeats.Add(new AssetBeat { Asset = asset, Beat = beat });
 
             context.Projects.Add(project);
+            context.Episodes.Add(episode);
+            context.Beats.Add(beat);
+            context.Assets.Add(asset);
             context.SaveChanges();
         }
 
