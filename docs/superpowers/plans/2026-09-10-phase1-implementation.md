@@ -1208,3 +1208,270 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 5: AssetType resource — DTOs, service, controller
+
+AssetType is the extensible type registry (the Global Constraint that new asset types must not require a code change flows through this resource — an agent or user creates a new `AssetType` row via this same API instead of a schema change).
+
+**Files:**
+- Create: `src/ProductionBible.Application/Dtos/AssetTypeDtos.cs`
+- Create: `src/ProductionBible.Application/Services/IAssetTypeService.cs`
+- Create: `src/ProductionBible.Application/Services/AssetTypeService.cs`
+- Create: `src/ProductionBible.Api/Controllers/AssetTypesController.cs`
+- Test: `tests/ProductionBible.Application.Tests/AssetTypeServiceTests.cs`
+
+**Interfaces:**
+- Consumes: `ProductionBibleDbContext` (Task 2).
+- Produces: `IAssetTypeService` with `GetAllAsync()`, `GetByIdAsync(int id)`, `CreateAsync(CreateAssetTypeRequest)`, `DeleteAsync(int id)`. No `UpdateAsync` — a type's identity is its name; renaming is delete-and-recreate, and Task 7 (Asset) will look up `AssetTypeId` by name during creation.
+
+- [ ] **Step 1: Write the DTOs**
+
+`src/ProductionBible.Application/Dtos/AssetTypeDtos.cs`:
+
+```csharp
+namespace ProductionBible.Application.Dtos;
+
+public record AssetTypeDto(int Id, string Name);
+
+public record CreateAssetTypeRequest(string Name);
+```
+
+- [ ] **Step 2: Write the failing service test**
+
+`tests/ProductionBible.Application.Tests/AssetTypeServiceTests.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Application.Tests;
+
+public class AssetTypeServiceTests
+{
+    private static ProductionBibleDbContext CreateInMemoryContext()
+    {
+        var options = new DbContextOptionsBuilder<ProductionBibleDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new ProductionBibleDbContext(options);
+    }
+
+    [Fact]
+    public async Task CreateAsync_then_GetAllAsync_returns_the_new_type()
+    {
+        await using var context = CreateInMemoryContext();
+        var service = new AssetTypeService(context);
+
+        var created = await service.CreateAsync(new CreateAssetTypeRequest("Shot"));
+        var all = await service.GetAllAsync();
+
+        Assert.True(created.Id > 0);
+        Assert.Contains(all, t => t.Name == "Shot");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_returns_null_for_unknown_id()
+    {
+        await using var context = CreateInMemoryContext();
+        var service = new AssetTypeService(context);
+
+        var result = await service.GetByIdAsync(999);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task CreateAsync_rejects_a_duplicate_name()
+    {
+        await using var context = CreateInMemoryContext();
+        var service = new AssetTypeService(context);
+        await service.CreateAsync(new CreateAssetTypeRequest("Shot"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.CreateAsync(new CreateAssetTypeRequest("Shot")));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_removes_the_type()
+    {
+        await using var context = CreateInMemoryContext();
+        var service = new AssetTypeService(context);
+        var created = await service.CreateAsync(new CreateAssetTypeRequest("Animation"));
+
+        var deleted = await service.DeleteAsync(created.Id);
+
+        Assert.True(deleted);
+        Assert.Null(await service.GetByIdAsync(created.Id));
+    }
+}
+```
+
+- [ ] **Step 3: Run the tests to verify they fail**
+
+```bash
+dotnet test tests/ProductionBible.Application.Tests --filter AssetTypeServiceTests
+```
+
+Expected: FAIL to compile — `IAssetTypeService`/`AssetTypeService` don't exist yet.
+
+- [ ] **Step 4: Write the service interface and implementation**
+
+`src/ProductionBible.Application/Services/IAssetTypeService.cs`:
+
+```csharp
+using ProductionBible.Application.Dtos;
+
+namespace ProductionBible.Application.Services;
+
+public interface IAssetTypeService
+{
+    Task<IReadOnlyList<AssetTypeDto>> GetAllAsync();
+    Task<AssetTypeDto?> GetByIdAsync(int id);
+    Task<AssetTypeDto> CreateAsync(CreateAssetTypeRequest request);
+    Task<bool> DeleteAsync(int id);
+}
+```
+
+`src/ProductionBible.Application/Services/AssetTypeService.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Entities;
+
+namespace ProductionBible.Application.Services;
+
+public class AssetTypeService : IAssetTypeService
+{
+    private readonly ProductionBibleDbContext _db;
+
+    public AssetTypeService(ProductionBibleDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task<IReadOnlyList<AssetTypeDto>> GetAllAsync()
+    {
+        return await _db.AssetTypes
+            .Select(t => new AssetTypeDto(t.Id, t.Name))
+            .ToListAsync();
+    }
+
+    public async Task<AssetTypeDto?> GetByIdAsync(int id)
+    {
+        var type = await _db.AssetTypes.FindAsync(id);
+        return type is null ? null : new AssetTypeDto(type.Id, type.Name);
+    }
+
+    public async Task<AssetTypeDto> CreateAsync(CreateAssetTypeRequest request)
+    {
+        var exists = await _db.AssetTypes.AnyAsync(t => t.Name == request.Name);
+        if (exists)
+        {
+            throw new InvalidOperationException($"An asset type named '{request.Name}' already exists.");
+        }
+
+        var type = new AssetType { Name = request.Name };
+        _db.AssetTypes.Add(type);
+        await _db.SaveChangesAsync();
+        return new AssetTypeDto(type.Id, type.Name);
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var type = await _db.AssetTypes.FindAsync(id);
+        if (type is null) return false;
+
+        _db.AssetTypes.Remove(type);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+}
+```
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+```bash
+dotnet test tests/ProductionBible.Application.Tests --filter AssetTypeServiceTests
+```
+
+Expected: PASS, 4 tests.
+
+- [ ] **Step 6: Write the controller**
+
+`src/ProductionBible.Api/Controllers/AssetTypesController.cs`:
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Api.Controllers;
+
+[ApiController]
+[Route("api/asset-types")]
+public class AssetTypesController : ControllerBase
+{
+    private readonly IAssetTypeService _service;
+
+    public AssetTypesController(IAssetTypeService service)
+    {
+        _service = service;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<AssetTypeDto>>> GetAll()
+        => Ok(await _service.GetAllAsync());
+
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<AssetTypeDto>> GetById(int id)
+    {
+        var type = await _service.GetByIdAsync(id);
+        return type is null ? NotFound() : Ok(type);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<AssetTypeDto>> Create(CreateAssetTypeRequest request)
+    {
+        try
+        {
+            var created = await _service.CreateAsync(request);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ex.Message);
+        }
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var deleted = await _service.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
+    }
+}
+```
+
+- [ ] **Step 7: Build to verify the controller compiles**
+
+```bash
+dotnet build src/ProductionBible.Api
+```
+
+Expected: builds.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add -A
+git commit -m "Add AssetType CRUD: service, controller, and service tests
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
