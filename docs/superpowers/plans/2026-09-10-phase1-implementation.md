@@ -3380,3 +3380,261 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 13: Importer — `StoryboardHtmlParser`
+
+Parses two things out of `storyboard.html`: the per-setup shot tables (Setup A–F, in "02 The shot list") and the animation/title clip tables (in "04 Animations, delivered"). It deliberately does **not** attempt to parse the dense per-episode beat-sheet summary row (e.g. `<tr><td><strong>EP 1</strong></td><td><code>00:00</code> A-01/02/03, B-01 &middot; ...</td></tr>`) — that text mixes shot-code ranges, freeform prose, and inconsistent code formats (`A-01/02/03`, `G1`, `f1`, `E-S`) too unreliably to parse safely for one-time seed data. Beats are derived instead from `production_plan.md`'s much more regular per-shot meta line (Task 14) — a deliberate, documented Phase 1 scope decision, not an oversight.
+
+**Known limitation to verify during implementation:** this parser assumes every Setup A–F table shares the same 3-column shape (`Shot | Scene setup | Camera & capture`), confirmed for Setup A. If Setup E ("Pieces to camera") or Setup F ("Manufactured failures") use a different column layout in the live file, rows from those tables will be silently skipped (the code checks `tds.Count < 3` and skips short rows rather than throwing) rather than corrupt data. Check `storyboard.html`'s Setup E/F tables against this assumption when running the importer for real, and adjust column indices if they differ.
+
+**Files:**
+- Create: `src/ProductionBible.Importer/Models/ParsedShotRow.cs`
+- Create: `src/ProductionBible.Importer/Models/ParsedAnimationRow.cs`
+- Create: `src/ProductionBible.Importer/StoryboardHtmlParser.cs`
+- Create: `tests/ProductionBible.Importer.Tests/Fixtures/storyboard.html` (verbatim copy)
+- Test: `tests/ProductionBible.Importer.Tests/StoryboardHtmlParserTests.cs`
+
+**Interfaces:**
+- Produces: `StoryboardHtmlParser.Parse(string html)` returning `(List<ParsedShotRow> ShotRows, List<ParsedAnimationRow> AnimationRows)`. `ParsedShotRow(string Code, string EpisodeTimecodeRaw, string SceneSetup, string CaptureNote, string SetupSection)`. `ParsedAnimationRow(string Code, int? DurationSeconds, string Description)`. Task 15 (`ImportMapper`) consumes both lists by exactly these property names.
+
+- [ ] **Step 1: Copy the real file as a test fixture**
+
+```bash
+mkdir -p tests/ProductionBible.Importer.Tests/Fixtures
+cp "D:\Data\source\HalfNutELS-Video\storyboard.html" tests/ProductionBible.Importer.Tests/Fixtures/storyboard.html
+```
+
+Edit `tests/ProductionBible.Importer.Tests/ProductionBible.Importer.Tests.csproj` to copy fixtures to the test output directory — add inside the existing `<Project>` element:
+
+```xml
+  <ItemGroup>
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+```
+
+- [ ] **Step 2: Write the model records**
+
+`src/ProductionBible.Importer/Models/ParsedShotRow.cs`:
+
+```csharp
+namespace ProductionBible.Importer.Models;
+
+public record ParsedShotRow(
+    string Code,
+    string EpisodeTimecodeRaw,
+    string SceneSetup,
+    string CaptureNote,
+    string SetupSection);
+```
+
+`src/ProductionBible.Importer/Models/ParsedAnimationRow.cs`:
+
+```csharp
+namespace ProductionBible.Importer.Models;
+
+public record ParsedAnimationRow(string Code, int? DurationSeconds, string Description);
+```
+
+- [ ] **Step 3: Write the failing parser test**
+
+`tests/ProductionBible.Importer.Tests/StoryboardHtmlParserTests.cs`:
+
+```csharp
+using ProductionBible.Importer;
+
+namespace ProductionBible.Importer.Tests;
+
+public class StoryboardHtmlParserTests
+{
+    private static string LoadFixture() =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "storyboard.html"));
+
+    [Fact]
+    public void Parses_the_A01_shot_row_from_the_real_file()
+    {
+        var (shotRows, _) = StoryboardHtmlParser.Parse(LoadFixture());
+
+        var a01 = Assert.Single(shotRows, r => r.Code == "A-01");
+        Assert.Equal("EP1 00:00", a01.EpisodeTimecodeRaw);
+        Assert.Contains("Steel bar", a01.SceneSetup);
+        Assert.Contains("3-jaw", a01.SceneSetup);
+        Assert.Contains("Macro on the tool entering the work", a01.CaptureNote);
+        Assert.Equal("Setup A — Lathe, running", a01.SetupSection);
+    }
+
+    [Fact]
+    public void Parses_shot_rows_from_multiple_setup_sections()
+    {
+        var (shotRows, _) = StoryboardHtmlParser.Parse(LoadFixture());
+
+        var codes = shotRows.Select(r => r.Code).ToHashSet();
+        Assert.Contains("A-01", codes);
+        Assert.Contains("B-02", codes);
+        Assert.Contains("C-01", codes);
+        Assert.Contains("D-01", codes);
+        Assert.Contains("F-01", codes);
+        Assert.True(shotRows.Count >= 40, $"expected at least 40 shot rows, got {shotRows.Count}");
+    }
+
+    [Fact]
+    public void Parses_a_single_code_animation_row_with_its_duration()
+    {
+        var (_, animationRows) = StoryboardHtmlParser.Parse(LoadFixture());
+
+        var g1 = Assert.Single(animationRows, r => r.Code == "g1_gears");
+        Assert.Equal(15, g1.DurationSeconds);
+        Assert.Contains("gear train dissolving", g1.Description);
+    }
+
+    [Fact]
+    public void Expands_the_condensed_t1_through_t5_title_row_into_five_rows()
+    {
+        var (_, animationRows) = StoryboardHtmlParser.Parse(LoadFixture());
+
+        var titleCodes = new[] { "t1_title", "t2_title", "t3_title", "t4_title", "t5_title" };
+        foreach (var code in titleCodes)
+        {
+            var row = Assert.Single(animationRows, r => r.Code == code);
+            Assert.Equal(4, row.DurationSeconds);
+        }
+    }
+}
+```
+
+- [ ] **Step 4: Run the test to verify it fails**
+
+```bash
+dotnet test tests/ProductionBible.Importer.Tests --filter StoryboardHtmlParserTests
+```
+
+Expected: FAIL to compile — `StoryboardHtmlParser` does not exist yet.
+
+- [ ] **Step 5: Write the parser**
+
+`src/ProductionBible.Importer/StoryboardHtmlParser.cs`:
+
+```csharp
+using System.Text.RegularExpressions;
+using HtmlAgilityPack;
+using ProductionBible.Importer.Models;
+
+namespace ProductionBible.Importer;
+
+public static class StoryboardHtmlParser
+{
+    public static (List<ParsedShotRow> ShotRows, List<ParsedAnimationRow> AnimationRows) Parse(string html)
+    {
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
+        return (ParseShotRows(doc), ParseAnimationRows(doc));
+    }
+
+    private static List<ParsedShotRow> ParseShotRows(HtmlDocument doc)
+    {
+        var rows = new List<ParsedShotRow>();
+        var setupHeadings = doc.DocumentNode.SelectNodes("//h3")?
+            .Where(h => Decode(h.InnerText).TrimStart().StartsWith("Setup ", StringComparison.Ordinal))
+            ?? Enumerable.Empty<HtmlNode>();
+
+        foreach (var heading in setupHeadings)
+        {
+            var setupName = Decode(heading.InnerText).Trim();
+            var tableWrap = heading.SelectSingleNode("following-sibling::div[contains(@class,'tablewrap')][1]");
+            var trs = tableWrap?.SelectNodes(".//tbody/tr");
+            if (trs is null) continue;
+
+            foreach (var tr in trs)
+            {
+                var tds = tr.SelectNodes("td");
+                if (tds is null || tds.Count < 3) continue;
+
+                var strong = tds[0].SelectSingleNode(".//strong");
+                if (strong is null) continue;
+                var span = tds[0].SelectSingleNode(".//span[contains(@class,'small')]");
+
+                rows.Add(new ParsedShotRow(
+                    Code: Decode(strong.InnerText).Trim(),
+                    EpisodeTimecodeRaw: span is null ? "" : Decode(span.InnerText).Trim(),
+                    SceneSetup: Decode(tds[1].InnerText).Trim(),
+                    CaptureNote: Decode(tds[2].InnerText).Trim(),
+                    SetupSection: setupName));
+            }
+        }
+
+        return rows;
+    }
+
+    private static List<ParsedAnimationRow> ParseAnimationRows(HtmlDocument doc)
+    {
+        var results = new List<ParsedAnimationRow>();
+        var candidateRows = doc.DocumentNode
+            .SelectNodes("//table/tbody/tr[td[1]/code and td[2][contains(@class,'num-col')]]")
+            ?? Enumerable.Empty<HtmlNode>();
+
+        foreach (var tr in candidateRows)
+        {
+            var tds = tr.SelectNodes("td");
+            var codeCellText = Decode(tds[0].InnerText).Trim();
+            var durationText = Decode(tds[1].InnerText).Trim();
+            var description = Decode(tds[2].InnerText).Trim();
+            var durationSeconds = ParseDurationSeconds(durationText);
+
+            foreach (var code in ExpandCodeRange(codeCellText))
+            {
+                results.Add(new ParsedAnimationRow(code, durationSeconds, description));
+            }
+        }
+
+        return results;
+    }
+
+    private static string Decode(string html) => HtmlEntity.DeEntitize(html);
+
+    private static int? ParseDurationSeconds(string text)
+    {
+        var match = Regex.Match(text, @"([\d.]+)\s*s");
+        return match.Success && double.TryParse(match.Groups[1].Value, out var seconds)
+            ? (int)Math.Round(seconds)
+            : null;
+    }
+
+    private static IEnumerable<string> ExpandCodeRange(string codeCellText)
+    {
+        var match = Regex.Match(
+            codeCellText,
+            @"^(?<pre>[a-zA-Z]+)(?<from>\d+)(?<suf>_[a-zA-Z]+)\s*(?:…|\.\.\.)\s*[a-zA-Z]+(?<to>\d+)_[a-zA-Z]+$");
+        if (!match.Success)
+        {
+            yield return codeCellText;
+            yield break;
+        }
+
+        var from = int.Parse(match.Groups["from"].Value);
+        var to = int.Parse(match.Groups["to"].Value);
+        for (var i = from; i <= to; i++)
+        {
+            yield return $"{match.Groups["pre"].Value}{i}{match.Groups["suf"].Value}";
+        }
+    }
+}
+```
+
+- [ ] **Step 6: Run the test to verify it passes**
+
+```bash
+dotnet test tests/ProductionBible.Importer.Tests --filter StoryboardHtmlParserTests
+```
+
+Expected: PASS, 4 tests. If `Parses_shot_rows_from_multiple_setup_sections` fails because a Setup E or F table has a different column count than assumed, that confirms the "known limitation" above — investigate that table's actual HTML structure and adjust `ParseShotRows`'s column indices (or add a second parsing branch) accordingly before moving on; don't silently loosen the test's assertions to paper over it.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add -A
+git commit -m "Add StoryboardHtmlParser with real-file fixture tests
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
