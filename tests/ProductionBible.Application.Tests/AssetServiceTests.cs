@@ -1,0 +1,121 @@
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Entities;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Application.Tests;
+
+public class AssetServiceTests
+{
+    private static ProductionBibleDbContext CreateInMemoryContext()
+    {
+        var options = new DbContextOptionsBuilder<ProductionBibleDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new ProductionBibleDbContext(options);
+    }
+
+    private static async Task<(int episodeId, int assetTypeId, int beatId)> SeedAsync(ProductionBibleDbContext context)
+    {
+        var project = new Project { Name = "HalfNut ELS" };
+        var episode = new Episode { Project = project, Name = "EP1", OrderIndex = 1 };
+        var assetType = new AssetType { Name = "Shot" };
+        var beat = new Beat { Episode = episode, Timecode = "00:00", Purpose = "Cold open" };
+        context.Episodes.Add(episode);
+        context.AssetTypes.Add(assetType);
+        context.Beats.Add(beat);
+        await context.SaveChangesAsync();
+        return (episode.Id, assetType.Id, beat.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_stores_attributes_and_beat_links()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, beatId) = await SeedAsync(context);
+        var service = new AssetService(context);
+
+        var created = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            AssetTypeId: assetTypeId,
+            Code: "A-01",
+            Title: "Tool entering the work",
+            ScriptText: null,
+            Status: "Planned",
+            Notes: null,
+            SequenceNumber: 1,
+            TargetLengthSeconds: null,
+            Attributes: new Dictionary<string, string> { ["SceneSetup"] = "Steel bar, ~25mm" },
+            BeatIds: new[] { beatId }));
+
+        var fetched = await service.GetByIdAsync(created.Id);
+        Assert.NotNull(fetched);
+        Assert.Equal("A-01", fetched!.Code);
+        Assert.Equal("Shot", fetched.AssetTypeName);
+        Assert.Equal("Steel bar, ~25mm", fetched.Attributes["SceneSetup"]);
+        Assert.Equal(new[] { beatId }, fetched.BeatIds);
+    }
+
+    [Fact]
+    public async Task GetByEpisodeAsync_returns_assets_for_that_episode_only()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, _) = await SeedAsync(context);
+        var otherEpisode = new Episode { ProjectId = (await context.Episodes.FindAsync(episodeId))!.ProjectId, Name = "EP2", OrderIndex = 2 };
+        context.Episodes.Add(otherEpisode);
+        await context.SaveChangesAsync();
+        var service = new AssetService(context);
+        await service.CreateAsync(episodeId, MinimalRequest(assetTypeId, "A-01"));
+        await service.CreateAsync(otherEpisode.Id, MinimalRequest(assetTypeId, "B-01"));
+
+        var assets = await service.GetByEpisodeAsync(episodeId);
+
+        Assert.Single(assets);
+        Assert.Equal("A-01", assets[0].Code);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_replaces_attributes_and_beat_links_rather_than_merging()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, beatId) = await SeedAsync(context);
+        var service = new AssetService(context);
+        var created = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-01", "Original title", null, "Planned", null, 1, null,
+            new Dictionary<string, string> { ["SceneSetup"] = "Original setup" },
+            new[] { beatId }));
+
+        var updated = await service.UpdateAsync(created.Id, new UpdateAssetRequest(
+            assetTypeId, "A-01", "Updated title", null, "Shot", null, 1, null,
+            new Dictionary<string, string> { ["AngleAndCamera"] = "Macro on the tool" },
+            Array.Empty<int>()));
+
+        Assert.NotNull(updated);
+        Assert.Equal("Updated title", updated!.Title);
+        Assert.Equal("Shot", updated.Status);
+        Assert.False(updated.Attributes.ContainsKey("SceneSetup"));
+        Assert.Equal("Macro on the tool", updated.Attributes["AngleAndCamera"]);
+        Assert.Empty(updated.BeatIds);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_removes_the_asset_and_its_attributes()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, beatId) = await SeedAsync(context);
+        var service = new AssetService(context);
+        var created = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-01", "Title", null, "Planned", null, null, null,
+            new Dictionary<string, string> { ["SceneSetup"] = "Setup" },
+            new[] { beatId }));
+
+        var deleted = await service.DeleteAsync(created.Id);
+
+        Assert.True(deleted);
+        Assert.Null(await service.GetByIdAsync(created.Id));
+        Assert.Empty(context.AssetAttributes.Where(a => a.AssetId == created.Id));
+    }
+
+    private static CreateAssetRequest MinimalRequest(int assetTypeId, string code) => new(
+        assetTypeId, code, code, null, "Planned", null, null, null, null, null);
+}
