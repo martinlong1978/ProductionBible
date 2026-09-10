@@ -2,7 +2,16 @@ using Microsoft.EntityFrameworkCore;
 using ProductionBible.Application.Data;
 using ProductionBible.Application.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+// Angular 22's `@angular/build:application` builder always writes the browser bundle
+// into a `browser/` subfolder of the output path (to leave room for an SSR `server/`
+// folder alongside it), even for a purely client-side app. Point the web root there so
+// `dotnet run --project src/ProductionBible.Api` serves `index.html` straight out of
+// `wwwroot/browser` without needing any special ng build flags.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    WebRootPath = "wwwroot/browser",
+});
 
 builder.WebHost.UseUrls("http://0.0.0.0:5280");
 
