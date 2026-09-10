@@ -2885,3 +2885,250 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 11: Timeline display mode (vertical stacked tracks)
+
+**Files:**
+- Create: `web/src/app/bible/timeline-view.component.ts`
+- Create: `web/src/app/bible/timeline-view.component.html`
+- Test: `web/src/app/bible/timeline-view.component.spec.ts`
+- Modify: `web/src/app/bible/bible.component.ts` (import `TimelineViewComponent`)
+- Modify: `web/src/app/bible/bible.component.html` (render it when `viewMode === 'timeline'`)
+
+**Interfaces:**
+- Consumes: `BeatDto[]`, `AssetDto[]` (Task 9's models), as `@Input()`s.
+- Produces: `TimelineViewComponent` with a `lanes: { name: string; assets: AssetDto[] }[]` computed field. Lane assignment is keyed by `AssetDto.assetTypeName`: `PieceToCamera` → `A-Roll`, `Shot` → `B-Roll`, `Animation` → `Animations`, `Title` → `Titles`, anything else → `Other`. Within a lane, assets are ordered by their position in the flattened beat/timecode sequence (`beats.flatMap(b => b.assetIds)`), so the lane reads left-to-right in story order — the same reason a DaVinci timeline reads left-to-right by playhead position.
+
+- [ ] **Step 1: Write the failing component test**
+
+`web/src/app/bible/timeline-view.component.spec.ts`:
+
+```typescript
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { TimelineViewComponent } from './timeline-view.component';
+import { AssetDto, BeatDto } from '../core/models';
+
+describe('TimelineViewComponent', () => {
+  let fixture: ComponentFixture<TimelineViewComponent>;
+  let component: TimelineViewComponent;
+
+  function asset(id: number, assetTypeName: string, code: string): AssetDto {
+    return {
+      id, episodeId: 1, assetTypeId: 1, assetTypeName, code, title: code,
+      scriptText: null, status: 'Planned', notes: null, sequenceNumber: null,
+      targetLengthSeconds: null, completedAtUtc: null, attributes: {}, beatIds: [],
+    };
+  }
+
+  const beats: BeatDto[] = [
+    { id: 1, episodeId: 1, timecode: '00:00', purpose: 'Cold open', assetIds: [2, 1] },
+    { id: 2, episodeId: 1, timecode: '02:00', purpose: 'Graphic', assetIds: [3] },
+  ];
+  const assets: AssetDto[] = [
+    asset(1, 'Shot', 'A-01'),
+    asset(2, 'PieceToCamera', 'E-S'),
+    asset(3, 'Animation', 'g1_gears'),
+    asset(4, 'Title', 't1_title'),
+    asset(5, 'Flyover', 'f1'),
+  ];
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({ imports: [TimelineViewComponent] }).compileComponents();
+    fixture = TestBed.createComponent(TimelineViewComponent);
+    component = fixture.componentInstance;
+    component.beats = beats;
+    component.assets = assets;
+    component.ngOnChanges();
+    fixture.detectChanges();
+  });
+
+  it('groups assets into lanes by asset type', () => {
+    const laneNames = component.lanes.map((lane) => lane.name);
+    expect(laneNames).toEqual(['A-Roll', 'B-Roll', 'Animations', 'Titles', 'Other']);
+  });
+
+  it('orders assets within the B-Roll lane by beat sequence, not asset id', () => {
+    const bRoll = component.lanes.find((lane) => lane.name === 'B-Roll')!;
+    expect(bRoll.assets.map((a) => a.code)).toEqual(['A-01']);
+  });
+
+  it('orders the A-Roll lane correctly when the beat lists the asset before others', () => {
+    const aRoll = component.lanes.find((lane) => lane.name === 'A-Roll')!;
+    expect(aRoll.assets.map((a) => a.code)).toEqual(['E-S']);
+  });
+
+  it('puts an asset type with no lane mapping into Other', () => {
+    const other = component.lanes.find((lane) => lane.name === 'Other')!;
+    expect(other.assets.map((a) => a.code)).toEqual(['f1']);
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+cd web
+npx ng test --watch=false
+cd ..
+```
+
+Expected: FAIL to compile — `TimelineViewComponent` does not exist yet.
+
+- [ ] **Step 3: Write the component**
+
+`web/src/app/bible/timeline-view.component.ts`:
+
+```typescript
+import { Component, Input, OnChanges } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { AssetDto, BeatDto } from '../core/models';
+
+interface TimelineLane {
+  name: string;
+  assets: AssetDto[];
+}
+
+const LANE_BY_ASSET_TYPE: Record<string, string> = {
+  PieceToCamera: 'A-Roll',
+  Shot: 'B-Roll',
+  Animation: 'Animations',
+  Title: 'Titles',
+};
+
+const LANE_ORDER = ['A-Roll', 'B-Roll', 'Animations', 'Titles', 'Other'];
+
+@Component({
+  selector: 'app-timeline-view',
+  standalone: true,
+  imports: [CommonModule],
+  templateUrl: './timeline-view.component.html',
+})
+export class TimelineViewComponent implements OnChanges {
+  @Input() beats: BeatDto[] = [];
+  @Input() assets: AssetDto[] = [];
+
+  lanes: TimelineLane[] = [];
+
+  ngOnChanges(): void {
+    this.lanes = this.buildLanes();
+  }
+
+  private buildLanes(): TimelineLane[] {
+    const orderedAssetIds = this.beats.flatMap((beat) => beat.assetIds);
+    const orderIndex = new Map(orderedAssetIds.map((id, index) => [id, index]));
+
+    const grouped = new Map<string, AssetDto[]>();
+    for (const asset of this.assets) {
+      const laneName = LANE_BY_ASSET_TYPE[asset.assetTypeName] ?? 'Other';
+      if (!grouped.has(laneName)) grouped.set(laneName, []);
+      grouped.get(laneName)!.push(asset);
+    }
+
+    for (const list of grouped.values()) {
+      list.sort((a, b) => {
+        const aIndex = orderIndex.has(a.id) ? orderIndex.get(a.id)! : Number.MAX_SAFE_INTEGER;
+        const bIndex = orderIndex.has(b.id) ? orderIndex.get(b.id)! : Number.MAX_SAFE_INTEGER;
+        return aIndex - bIndex;
+      });
+    }
+
+    return LANE_ORDER.filter((name) => grouped.has(name)).map((name) => ({
+      name,
+      assets: grouped.get(name)!,
+    }));
+  }
+}
+```
+
+- [ ] **Step 4: Write the template**
+
+`web/src/app/bible/timeline-view.component.html`:
+
+```html
+<div class="timeline-view">
+  <div class="lane" *ngFor="let lane of lanes">
+    <h4>{{ lane.name }}</h4>
+    <div class="lane-track">
+      <div class="clip" *ngFor="let asset of lane.assets">
+        <strong>{{ asset.code }}</strong>
+        <span>{{ asset.title }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+```bash
+cd web
+npx ng test --watch=false
+cd ..
+```
+
+Expected: PASS, 4 tests.
+
+- [ ] **Step 6: Wire the toggle into `BibleComponent`**
+
+Modify `web/src/app/bible/bible.component.ts` — add the import and register it in the standalone `imports` array:
+
+```typescript
+import { TimelineViewComponent } from './timeline-view.component';
+```
+
+```typescript
+@Component({
+  selector: 'app-bible',
+  standalone: true,
+  imports: [CommonModule, FormsModule, TimelineViewComponent],
+  templateUrl: './bible.component.html',
+})
+```
+
+Modify `web/src/app/bible/bible.component.html` — replace the closing `</ng-container>` block's bare `*ngIf` with an `else` branch:
+
+```html
+  <ng-container *ngIf="viewMode === 'list'; else timelineTpl">
+    <section class="beat" *ngFor="let beat of beats">
+      <h3>{{ beat.timecode }} — {{ beat.purpose }}</h3>
+      <ul>
+        <li *ngFor="let asset of assetsForBeat(beat)">
+          <strong>{{ asset.code }}</strong> — {{ asset.title }} ({{ asset.assetTypeName }}, {{ asset.status }})
+        </li>
+      </ul>
+    </section>
+    <section class="beat unassigned" *ngIf="unassignedAssets.length > 0">
+      <h3>Unassigned</h3>
+      <ul>
+        <li *ngFor="let asset of unassignedAssets">
+          <strong>{{ asset.code }}</strong> — {{ asset.title }}
+        </li>
+      </ul>
+    </section>
+  </ng-container>
+  <ng-template #timelineTpl>
+    <app-timeline-view [beats]="beats" [assets]="assets"></app-timeline-view>
+  </ng-template>
+```
+
+- [ ] **Step 7: Run the full Angular test suite to verify nothing broke**
+
+```bash
+cd web
+npx ng test --watch=false
+cd ..
+```
+
+Expected: PASS, all tests from Tasks 9-11.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add -A
+git commit -m "Add Timeline display mode as a toggle within the Bible view
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
