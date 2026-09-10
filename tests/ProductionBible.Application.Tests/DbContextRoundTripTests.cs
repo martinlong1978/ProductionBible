@@ -67,6 +67,7 @@ public class DbContextRoundTripTests : IDisposable
 
     public void Dispose()
     {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
     }
 }
