@@ -2228,3 +2228,195 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 8: Program.cs wiring — DI, migrations-on-startup, static files, LAN binding
+
+**Files:**
+- Modify: `src/ProductionBible.Api/Program.cs`
+- Modify: `src/ProductionBible.Api/appsettings.json`
+- Create: `src/ProductionBible.Api/wwwroot/.gitkeep`
+- Test: `tests/ProductionBible.Api.Tests/ProjectsApiTests.cs`
+
+**Interfaces:**
+- Consumes: every `I<X>Service`/`<X>Service` pair from Tasks 3-7, `ProductionBibleDbContext` (Task 2).
+- Produces: a running `WebApplication` reachable on `0.0.0.0:5280`, with all 5 controllers live behind real DI, migrations applied automatically on startup, and static files served from `wwwroot` (empty until Task 16 builds the Angular app into it). Exposes `public partial class Program` so `WebApplicationFactory<Program>` can host it in tests.
+
+- [ ] **Step 1: Write the failing integration test**
+
+`tests/ProductionBible.Api.Tests/ProjectsApiTests.cs`:
+
+```csharp
+using System.Net;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.Mvc.Testing;
+using ProductionBible.Application.Dtos;
+
+namespace ProductionBible.Api.Tests;
+
+public class ProjectsApiTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    private readonly WebApplicationFactory<Program> _factory;
+
+    public ProjectsApiTests(WebApplicationFactory<Program> factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task Post_then_get_round_trips_a_project_through_the_real_http_pipeline()
+    {
+        var client = _factory.CreateClient();
+
+        var createResponse = await client.PostAsJsonAsync(
+            "/api/projects", new CreateProjectRequest("HalfNut ELS", "The lathe series"));
+        createResponse.EnsureSuccessStatusCode();
+        var created = await createResponse.Content.ReadFromJsonAsync<ProjectDto>();
+
+        Assert.NotNull(created);
+        var getResponse = await client.GetAsync($"/api/projects/{created!.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        var fetched = await getResponse.Content.ReadFromJsonAsync<ProjectDto>();
+        Assert.Equal("HalfNut ELS", fetched!.Name);
+    }
+
+    [Fact]
+    public async Task Get_unknown_project_returns_404()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/projects/999999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+}
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+dotnet test tests/ProductionBible.Api.Tests
+```
+
+Expected: FAIL — either a compile error (`Program` isn't `partial`/accessible yet, since the default minimal-API template's `Program.cs` top-level statements produce an implicit `Program` class that WebApplicationFactory can normally still find, but only once the DbContext/services are registered; without DI wiring the app will fail to start with a `DbContext not registered` / service-resolution exception at first request).
+
+- [ ] **Step 3: Write `appsettings.json`**
+
+`src/ProductionBible.Api/appsettings.json` (extend the template's generated file — keep its existing `Logging`/`AllowedHosts` keys, add `ConnectionStrings`):
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "Default": "Data Source={0}"
+  }
+}
+```
+
+`{0}` is a placeholder `Program.cs` substitutes with the resolved `App_Data` path — SQLite connection strings need an absolute or working-directory-relative path, and the working directory differs between `dotnet run`, a published exe, and the test host, so the path is resolved in code rather than hard-coded here.
+
+- [ ] **Step 4: Write `Program.cs`**
+
+`src/ProductionBible.Api/Program.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Services;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.UseUrls("http://0.0.0.0:5280");
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+
+var dataDir = Path.Combine(builder.Environment.ContentRootPath, "App_Data");
+Directory.CreateDirectory(dataDir);
+var dbPath = Path.Combine(dataDir, "productionbible.db");
+var connectionStringTemplate = builder.Configuration.GetConnectionString("Default") ?? "Data Source={0}";
+var connectionString = string.Format(connectionStringTemplate, dbPath);
+
+builder.Services.AddDbContext<ProductionBibleDbContext>(options => options.UseSqlite(connectionString));
+
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<IEpisodeService, EpisodeService>();
+builder.Services.AddScoped<IAssetTypeService, AssetTypeService>();
+builder.Services.AddScoped<IBeatService, BeatService>();
+builder.Services.AddScoped<IAssetService, AssetService>();
+
+var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ProductionBibleDbContext>();
+    db.Database.Migrate();
+}
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.MapControllers();
+app.MapFallbackToFile("index.html");
+
+app.Run();
+
+public partial class Program
+{
+}
+```
+
+Note: `WebApplicationFactory<Program>` in tests overrides the connection string is not needed here — because `dbPath` is computed under `ContentRootPath/App_Data`, and the test host's content root is the `ProductionBible.Api` build output directory, each test run reuses/creates `App_Data/productionbible.db` there. That's acceptable for Phase 1 (tests run against a real, migrated SQLite file, which also exercises the actual migration path) but means test runs are not isolated from each other's data. Accept this for now — Task 8's tests only assert on data they themselves created and look up by the ID they got back, so shared state doesn't make them flaky. If this becomes a problem later, override `IClassFixture` with a `WebApplicationFactory` that swaps in a per-test-run SQLite file via `builder.ConfigureServices`.
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+```bash
+dotnet test tests/ProductionBible.Api.Tests
+```
+
+Expected: PASS, 2 tests.
+
+- [ ] **Step 6: Run the full solution test suite**
+
+```bash
+dotnet test ProductionBible.sln
+```
+
+Expected: PASS — every test from Tasks 1-8 (smoke test, DbContext round-trip, 5 services' CRUD tests, 2 API integration tests).
+
+- [ ] **Step 7: Create the empty `wwwroot` placeholder**
+
+```bash
+mkdir -p src/ProductionBible.Api/wwwroot
+touch src/ProductionBible.Api/wwwroot/.gitkeep
+```
+
+(`.gitignore` from Task 1 does not exclude `wwwroot`, only `bin/`/`obj/` — confirm the folder is tracked by checking `git status` shows the new `.gitkeep`.)
+
+- [ ] **Step 8: Manually verify the app runs and binds to 0.0.0.0**
+
+```bash
+dotnet run --project src/ProductionBible.Api &
+sleep 3
+curl -s http://localhost:5280/api/projects
+kill %1
+```
+
+Expected: `curl` returns `[]` (empty JSON array — no projects yet) with no connection error, confirming the app started, applied migrations, and is listening.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add -A
+git commit -m "Wire DI, migrations-on-startup, and static file serving in Program.cs
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
