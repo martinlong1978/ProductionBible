@@ -50,32 +50,41 @@ Phase 1 only.
   historical reference only.
 
 ### Core data model
-Hierarchy: **Project → Episode → Shot**, confirmed as matching Martin's mental model,
-with one correction (see below).
+Hierarchy: **Project → Episode → Asset**, revised from an earlier Shot-only model per
+Martin's correction below. This is the most significant schema decision in Phase 1.
 
-- **Shot** is the atomic unit. Carries the union of what today lives split across
-  `storyboard.html`'s shot tables and `production_plan.md`'s per-shot pages:
-  - Identity: shot code (e.g. `A-01`), sequence number within shoot order (1–65 today)
-  - Storyboard-side fields: episode + timecode reference(s), narrative/beat context,
-    capture note
-  - Shoot-plan-side fields: location, setup/phase group, angle & camera, audio to
-    capture, target length, script (if any), additional considerations, production
-    notes (free text, filled in after the take), completion timestamp (Phase 3)
-  - **CORRECTION (Martin, 2026-09-10):** the "machine configuration" column from
-    `storyboard.html` is HalfNut-ELS-specific vocabulary (lathe/thread/rpm settings).
-    The generalized, domain-agnostic version of this field is **"Scene/subject setup"**
-    — whatever needs to be arranged/staged in front of the camera before the shot rolls
-    (a machine's configuration, a prop's position, a screen's state, wardrobe — whatever
-    applies to the production). Do not hard-code machining terms into the schema, labels,
-    or seed-import mapping logic beyond the imported *data* itself.
-- **Beat/VO** is a separate entity for narration that spans multiple shots or has no
-  shot at all (cold opens, framing VO, outline-script beats keyed by timecode). Not
-  merged into Shot. Relationship to Shot(s) still to be pinned down precisely (likely
-  many-to-many or a loose timecode-based association) — **open, needs a follow-up
-  question.**
+- **REVISION (Martin, 2026-09-10):** Shot and VO/Beat should not be modelled as two
+  separate kinds of thing at the top level. VO is just as much "an asset that needs to
+  be created" as a camera shot is — the difference is only *how* it's created (camera vs
+  microphone vs a rendered animation vs a title card). So the atomic production unit is
+  a generalized **Asset**, with a type: `Shot`, `VoiceOver`, `Animation`, `Title`,
+  `Graphic`, `Flyover`, etc. This matches how `storyboard.html` already organizes things
+  by lettered series (A/B/C/D = camera shot series, E = pieces to camera / VO, F =
+  credit flyovers, G = graphics/animations, T = title cards) — they're all "things that
+  need to be produced," just via different means.
+- **Beat** is the timecode/narrative anchor — episode + timecode + narrative purpose
+  (what today is the outline-script beat sheet, e.g. "EP1 04:00"). Confirmed
+  **many-to-many** with Asset: a Beat can reference several Assets (A-01/02/03, B-01
+  all under one beat), and an Asset can in principle serve more than one Beat (e.g.
+  reused b-roll cut into two different moments).
+- **CORRECTION (Martin, 2026-09-10):** the "machine configuration" column from
+  `storyboard.html` is HalfNut-ELS-specific vocabulary (lathe/thread/rpm settings).
+  The generalized, domain-agnostic version of this field is **"Scene/subject setup"**
+  — whatever needs to be arranged/staged before the asset is created (a machine's
+  configuration, a prop's position, a screen's state, wardrobe, a render parameter set
+  — whatever applies to the production/asset type). Do not hard-code machining terms
+  into the schema, labels, or seed-import mapping logic beyond the imported *data*
+  itself.
 - Multi-project / multi-episode support is native to the schema from the start (not
   retrofitted later) — this was requested explicitly and Project is the top-level
   entity.
+- **Open technical question (schema shape for type-specific fields):** Shot-type assets
+  need location/angle-camera/audio fields that don't apply to a Title asset; Animation
+  assets need a source-script reference that doesn't apply to a Shot. Need to decide
+  between (a) one Asset table, common fields only, type-specific extras in a flexible
+  key/value AssetAttribute table, (b) one Asset table (EF Core TPH) with nullable
+  type-specific columns, (c) Asset base table + one linked table per type (EF Core TPT).
+  **Not yet asked — next question.**
 
 ### Tech stack
 - Backend: ASP.NET Core (current LTS at build time — check .NET version when
@@ -87,23 +96,29 @@ with one correction (see below).
 
 ---
 
+### View modes (confirmed)
+- **Bible** and **Production Plan** are two independent screens/orderings over the same
+  Asset data (episode/timecode order vs shoot-day order grouped by phase/setup).
+- **Timeline is a display mode of the Bible view**, not a third independent screen — same
+  episode/timecode ordering, rendered as vertical stacked tracks (A-roll/B-roll/
+  titles/animations) instead of prose, toggled within Bible.
+
+### Visual identity (confirmed)
+- The app gets its **own distinct visual identity**, not the HalfNut ELS storyboard
+  palette — it needs to work for future non-HalfNut-ELS projects too. Design approach
+  TBD when UI work starts (separate concern from this data/API-focused spec).
+
 ## Open questions (not yet asked / not yet resolved)
 
-- Exact shape of the Beat/VO ↔ Shot relationship.
-- View-mode specifics: what exactly differs between "bible" (timeline/episode order),
-  "production plan" (shoot order, grouped by phase/setup), and "timeline" (vertical
-  DaVinci-style stacked A-roll/B-roll/titles/animations) — is timeline mode a third
-  independent view, or a visual variant of one of the other two?
+- Schema shape for type-specific Asset fields — see "Open technical question" above.
+  Next question to ask.
 - Printable export format: keep the current HTML→PDF pipeline's look, or a fresh design?
 - MCP tool surface: full CRUD parity with the REST API, or a curated subset of tools?
-- Angular version / UI component library (Material? something else?) and whether to
-  carry over the storyboard's existing palette (`#84A895`, `#66B7CE`, `#E0A344`,
-  `#B695BA`, `#0D1311`).
 - Authoring workflow: does the app also need free-text/markdown editing capability
   comparable to how storyboard.html / production_plan.md are edited today, or is
   structured-field editing sufficient?
 - .NET version pin, Angular version pin, EF Core migrations strategy.
-- Error handling / validation expectations (e.g. required fields per shot).
+- Error handling / validation expectations (e.g. required fields per asset type).
 - Testing approach and coverage expectations for Phase 1.
 
 ---
