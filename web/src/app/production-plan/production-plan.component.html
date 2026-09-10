@@ -1,0 +1,24 @@
+<div class="production-plan-view">
+  <section class="phase-group" *ngFor="let group of groups">
+    <h3>{{ group.phase }}</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Seq</th><th>Code</th><th>Title</th><th>Location</th>
+          <th>Angle &amp; camera</th><th>Audio</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let asset of group.assets">
+          <td>{{ asset.sequenceNumber }}</td>
+          <td>{{ asset.code }}</td>
+          <td>{{ asset.title }}</td>
+          <td>{{ asset.attributes['Location'] }}</td>
+          <td>{{ asset.attributes['AngleAndCamera'] }}</td>
+          <td>{{ asset.attributes['AudioNotes'] }}</td>
+          <td>{{ asset.status }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>
