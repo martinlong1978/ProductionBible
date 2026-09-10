@@ -4198,3 +4198,138 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 16: End-to-end wiring — build Angular into wwwroot, seed the real database, README
+
+**Files:**
+- Modify: `src/ProductionBible.Api/wwwroot/` (Angular production build output)
+- Create: `README.md`
+
+**Interfaces:**
+- Consumes: everything from Tasks 1-15.
+- Produces: a single command sequence that builds and runs the whole app serving real HalfNut ELS data, documented in `README.md` for the next person (human or agent) who needs to run it.
+
+- [ ] **Step 1: Build the Angular app for production**
+
+```bash
+cd web
+npx ng build --output-path=../src/ProductionBible.Api/wwwroot
+cd ..
+```
+
+Expected: `src/ProductionBible.Api/wwwroot/` now contains `index.html`, JS/CSS bundles, etc. (replacing the `.gitkeep` placeholder from Task 8).
+
+- [ ] **Step 2: Run the real seed import against the app's actual database**
+
+Delete any dev database left over from Task 8's manual verification, then run the app once so migrations create a fresh `App_Data/productionbible.db`, stop it, and import into that same file:
+
+```bash
+rm -f src/ProductionBible.Api/App_Data/productionbible.db
+dotnet run --project src/ProductionBible.Api &
+sleep 3
+kill %1
+
+dotnet run --project src/ProductionBible.Importer -- \
+  "D:\Data\source\HalfNutELS-Video\storyboard.html" \
+  "D:\Data\source\HalfNutELS-Video\production_plan.md" \
+  src/ProductionBible.Api/App_Data/productionbible.db
+```
+
+Expected: `Imported project 'HalfNut ELS' (id 1).`, plus any warning lines (already reviewed in Task 15).
+
+- [ ] **Step 3: Run the app and manually verify both views show real data**
+
+```bash
+dotnet run --project src/ProductionBible.Api &
+sleep 3
+curl -s http://localhost:5280/api/projects
+curl -s http://localhost:5280/api/projects/1/episodes
+```
+
+Expected: the first `curl` returns a JSON array containing the `HalfNut ELS` project; the second returns 5 episodes (`EP1`-`EP5`).
+
+Then open `http://localhost:5280` (or `http://<workstation-LAN-IP>:5280` from another device, confirming the LAN-reachability requirement) in a browser:
+- **Bible view** (default route): shows an episode picker; selecting EP1 shows beats with their linked assets (e.g. the `00:00` beat should list `A-01`, `A-02`, `A-03` per the real beat data — verify against what `production_plan.md` actually produced, since the exact beat grouping depends on Task 15's timecode matching, not on the dense summary row Task 13 deliberately doesn't parse). Clicking "Show Timeline" switches to the stacked-track view.
+- **Production Plan view**: shows phase-grouped shot pages in sequence order, starting with "Phase 1: The software time machine" containing `F-01`.
+
+```bash
+kill %1
+```
+
+- [ ] **Step 4: Write `README.md`**
+
+`README.md`:
+
+```markdown
+# ProductionBible
+
+A local web app unifying a video production's storyboard/bible, shoot-day production
+plan, and script sheets into one dataset. See `docs/superpowers/specs/` for the design
+and `docs/superpowers/plans/` for how it was built.
+
+## Running it
+
+Requires the .NET 10 SDK and Node.js (Angular CLI is invoked via `npx`, no global install
+needed).
+
+```bash
+# One-time: build the Angular frontend into the API's wwwroot
+cd web && npx ng build --output-path=../src/ProductionBible.Api/wwwroot && cd ..
+
+# Run the app (binds to 0.0.0.0:5280 — reachable from other devices on the LAN)
+dotnet run --project src/ProductionBible.Api
+```
+
+Open `http://localhost:5280` (or `http://<this-machine's-LAN-IP>:5280` from another
+device on the network).
+
+## Seeding real data (HalfNut ELS)
+
+The importer is a one-time tool — it does not sync, it populates a fresh database once:
+
+```bash
+dotnet run --project src/ProductionBible.Importer -- \
+  "D:\Data\source\HalfNutELS-Video\storyboard.html" \
+  "D:\Data\source\HalfNutELS-Video\production_plan.md" \
+  src/ProductionBible.Api/App_Data/productionbible.db
+```
+
+Run this against a fresh (or empty) `productionbible.db` — the app creates and migrates
+that file on first run if it doesn't already exist.
+
+## Development
+
+- Backend: `dotnet test ProductionBible.sln` runs every C# test.
+- Frontend dev server (hot reload, proxies `/api` to a separately-running backend on
+  port 5280): `cd web && npm start`.
+- Frontend tests: `cd web && npx ng test --watch=false`.
+
+## Project layout
+
+See `docs/superpowers/plans/2026-09-10-phase1-implementation.md`'s "File Structure"
+section for the full layout and the reasoning behind the `Application`/`Api`/`Importer`
+project split.
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "Wire up end-to-end: Angular build in wwwroot, real seed data, README
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+git push
+```
+
+---
+
+## Phase 1 completion criteria
+
+All of the following must be true before Phase 1 is considered done:
+
+- [ ] `dotnet test ProductionBible.sln` passes (Tasks 1-8, 13-15).
+- [ ] `cd web && npx ng test --watch=false` passes (Tasks 9-12).
+- [ ] The importer, run against the real `storyboard.html` + `production_plan.md`, produces exactly 65 shot-page assets plus the animation/title assets, with no unexplained `Warning:` output (each warning was read and judged acceptable, per Task 15 Step 7).
+- [ ] The running app, opened in a browser, shows real HalfNut ELS content in both the Bible view (with working Timeline toggle) and the Production Plan view.
+- [ ] The app is reachable from a second device on the LAN (phone/tablet), confirming the `0.0.0.0` binding actually works end-to-end, not just in `curl` from localhost.
