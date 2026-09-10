@@ -28,6 +28,28 @@ public class ProductionPlanMarkdownParserTests
     }
 
     [Fact]
+    public void Parses_ScriptText_for_compound_pages_using_the_bold_script_heading_variant()
+    {
+        // Six of the seven "pieces to camera" compound pages (E-B / EP1, E-B / EP2, E-L / EP3,
+        // E-B / EP4, E-B / EP5, E-L / EP1) use a bold-text heading — "**Script — read through in
+        // this order**" — instead of the "#### Script" heading the parser otherwise looks for.
+        // Verified directly against the fixture (line ~1619 for E-B / EP1): the section still ends
+        // at the next "#### " heading ("#### Additional considerations"), same as every other page,
+        // and its spoken lines are still "> " blockquotes, so the same extraction rule applies once
+        // the heading itself is recognised.
+        var pages = ProductionPlanMarkdownParser.Parse(LoadFixture());
+
+        var ebEp1 = Assert.Single(pages, p => p.Code == "E-B / EP1");
+        Assert.NotNull(ebEp1.ScriptText);
+        Assert.Contains("Teensy 4.1", ebEp1.ScriptText);
+        Assert.Contains("That's where episode two starts.", ebEp1.ScriptText);
+
+        var elEp1 = Assert.Single(pages, p => p.Code == "E-L / EP1");
+        Assert.NotNull(elEp1.ScriptText);
+        Assert.Contains("electronic leadscrew", elEp1.ScriptText);
+    }
+
+    [Fact]
     public void Parses_all_65_shot_pages()
     {
         var pages = ProductionPlanMarkdownParser.Parse(LoadFixture());

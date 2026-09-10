@@ -32,6 +32,19 @@ public static class ProductionPlanMarkdownParser
 
             var fields = ParseFieldTable(chunk);
 
+            // Six of the seven Phase 6 "pieces to camera" compound pages (E-B / EP1, E-B / EP2,
+            // E-L / EP3, E-B / EP4, E-B / EP5, E-L / EP1) mark their script section with a bold-text
+            // heading — "**Script — read through in this order**" — instead of the "#### Script"
+            // heading every other page (including the seventh compound page, E-L / EP5) uses.
+            // Confirmed directly against the fixture: the bold-heading section still ends at the
+            // next "#### " heading (always "#### Additional considerations" immediately after),
+            // and its spoken lines are still "> " blockquotes — sub-beats within the section are
+            // introduced by their own bold timecode headings (e.g. "**13:30 — Getting it onto my
+            // lathe**"), which ParseSection already ignores since only "> " lines are kept. So the
+            // same ParseSection logic applies once the alternate heading text is tried as a fallback.
+            var scriptText = ParseSection(chunk, "#### Script", ">")
+                ?? ParseSection(chunk, "**Script — read through in this order**", ">");
+
             pages.Add(new ParsedShotPage(
                 Code: headingMatch.Groups["code"].Value.Trim(),
                 Title: headingMatch.Groups["title"].Value.Trim(),
@@ -44,7 +57,7 @@ public static class ProductionPlanMarkdownParser
                 AngleAndCamera: fields.GetValueOrDefault("angle & camera"),
                 AudioNotes: fields.GetValueOrDefault("audio to capture"),
                 TargetLengthRaw: fields.GetValueOrDefault("target length"),
-                ScriptText: ParseSection(chunk, "#### Script", ">"),
+                ScriptText: scriptText,
                 AdditionalConsiderations: ParseSection(chunk, "#### Additional considerations", "-")));
         }
 
