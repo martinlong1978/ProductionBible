@@ -46,6 +46,13 @@ public class AssetTypeService : IAssetTypeService
         var type = await _db.AssetTypes.FindAsync(id);
         if (type is null) return false;
 
+        var inUse = await _db.Assets.AnyAsync(a => a.AssetTypeId == id);
+        if (inUse)
+        {
+            throw new InvalidOperationException(
+                $"Cannot delete asset type '{type.Name}': it is in use by one or more assets.");
+        }
+
         _db.AssetTypes.Remove(type);
         await _db.SaveChangesAsync();
         return true;

@@ -17,6 +17,7 @@ public class ProjectService : IProjectService
     public async Task<IReadOnlyList<ProjectDto>> GetAllAsync()
     {
         return await _db.Projects
+            .OrderBy(p => p.Id)
             .Select(p => new ProjectDto(p.Id, p.Name, p.Description))
             .ToListAsync();
     }

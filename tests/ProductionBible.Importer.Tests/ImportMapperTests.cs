@@ -84,7 +84,7 @@ public class ImportMapperTests
     // "pieces to camera" pages with compound codes ("E-L / EP1", "E-B / EP2", etc. — the same base
     // shot filmed separately per episode) were being looked up against storyboard.html's shot rows
     // (keyed on the plain "E-L"/"E-B"/"E-S") using the raw compound page.Code, which can never match.
-    // That meant these pages never got enriched with CaptureNote/StoryboardMachineConfig/
+    // That meant these pages never got enriched with CaptureNote/StoryboardSceneSetup/
     // StoryboardSetupSection, AND their base codes spuriously appeared as "unmatched" shot rows even
     // though a matching production_plan.md page genuinely exists. The fix normalizes " / EPn" off the
     // code before both the Asset.Code assignment and the shotRowsByCode lookup. This test asserts the
@@ -109,12 +109,12 @@ public class ImportMapperTests
         Assert.All(eLAssets, a => Assert.DoesNotContain("/", a.Code));
 
         // At least one of them was matched against storyboard.html's single "E-L" shot row and
-        // enriched with its StoryboardMachineConfig/StoryboardSetupSection attributes. (CaptureNote
+        // enriched with its StoryboardSceneSetup/StoryboardSetupSection attributes. (CaptureNote
         // is deliberately NOT asserted here: Task 13's review found storyboard.html's Setup E table
         // is only 2 columns in the real file, so ParsedShotRow.CaptureNote is genuinely empty for
         // E-L/E-B/E-S, and AddAttribute correctly skips empty values — that's real source data, not
         // a mapping defect.)
-        Assert.Contains(eLAssets, a => a.Attributes.Any(attr => attr.Key == "StoryboardMachineConfig" && attr.Value.Length > 0));
+        Assert.Contains(eLAssets, a => a.Attributes.Any(attr => attr.Key == "StoryboardSceneSetup" && attr.Value.Length > 0));
         Assert.Contains(eLAssets, a => a.Attributes.Any(attr => attr.Key == "StoryboardSetupSection" && attr.Value.Length > 0));
     }
 }

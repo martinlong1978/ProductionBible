@@ -5,11 +5,11 @@ using ProductionBible.Application.Dtos;
 
 namespace ProductionBible.Api.Tests;
 
-public class ProjectsApiTests : IClassFixture<WebApplicationFactory<Program>>
+public class ProjectsApiTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
 
-    public ProjectsApiTests(WebApplicationFactory<Program> factory)
+    public ProjectsApiTests(TestWebApplicationFactory factory)
     {
         _factory = factory;
     }

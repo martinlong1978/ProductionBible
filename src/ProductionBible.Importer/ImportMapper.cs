@@ -65,7 +65,7 @@ public class ImportMapper
             {
                 matchedCodes.Add(normalizedCode);
                 AddAttribute(asset, "CaptureNote", shotRow.CaptureNote);
-                AddAttribute(asset, "StoryboardMachineConfig", shotRow.SceneSetup);
+                AddAttribute(asset, "StoryboardSceneSetup", shotRow.SceneSetup);
                 AddAttribute(asset, "StoryboardSetupSection", shotRow.SetupSection);
             }
 
