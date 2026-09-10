@@ -31,6 +31,7 @@ export class ProductionPlanComponent {
 
   private loadGroups(projectId: number): void {
     this.api.getEpisodes(projectId).subscribe((episodes) => {
+      if (this.projectContext.selectedProjectId() !== projectId) return;
       if (episodes.length === 0) {
         this.groups = [];
         this.cdr.markForCheck();
@@ -38,6 +39,7 @@ export class ProductionPlanComponent {
       }
 
       forkJoin(episodes.map((episode) => this.api.getAssets(episode.id))).subscribe((assetLists) => {
+        if (this.projectContext.selectedProjectId() !== projectId) return;
         this.groups = buildPhaseGroups(assetLists.flat());
         this.cdr.markForCheck();
       });

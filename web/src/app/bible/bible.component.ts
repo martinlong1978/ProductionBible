@@ -41,10 +41,12 @@ export class BibleComponent {
   selectEpisode(episodeId: number): void {
     this.selectedEpisodeId = episodeId;
     this.api.getBeats(episodeId).subscribe((beats) => {
+      if (this.selectedEpisodeId !== episodeId) return;
       this.beats = beats;
       this.cdr.markForCheck();
     });
     this.api.getAssets(episodeId).subscribe((assets) => {
+      if (this.selectedEpisodeId !== episodeId) return;
       this.assets = assets;
       this.cdr.markForCheck();
     });
@@ -97,7 +99,9 @@ export class BibleComponent {
   }
 
   private loadEpisodes(projectId: number): void {
+    this.editingAssetId = null;
     this.api.getEpisodes(projectId).subscribe((episodes) => {
+      if (this.projectContext.selectedProjectId() !== projectId) return;
       this.episodes = episodes;
       if (episodes.length > 0) {
         this.selectEpisode(episodes[0].id);
