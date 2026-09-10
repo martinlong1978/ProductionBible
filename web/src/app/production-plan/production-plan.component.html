@@ -1,24 +1,37 @@
-<div class="production-plan-view">
-  <section class="phase-group" *ngFor="let group of groups">
-    <h3>{{ group.phase }}</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>Seq</th><th>Code</th><th>Title</th><th>Location</th>
-          <th>Angle &amp; camera</th><th>Audio</th><th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let asset of group.assets">
-          <td>{{ asset.sequenceNumber }}</td>
-          <td>{{ asset.code }}</td>
-          <td>{{ asset.title }}</td>
-          <td>{{ asset.attributes['Location'] }}</td>
-          <td>{{ asset.attributes['AngleAndCamera'] }}</td>
-          <td>{{ asset.attributes['AudioNotes'] }}</td>
-          <td>{{ asset.status }}</td>
-        </tr>
-      </tbody>
-    </table>
+<div class="space-y-6">
+  <section class="rounded-lg border border-border bg-surface" *ngFor="let group of groups">
+    <h3 class="sticky top-0 rounded-t-lg border-b border-border bg-surface px-4 py-3 text-sm font-semibold text-text-secondary">
+      {{ group.phase }}
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-border text-xs uppercase tracking-wide text-text-secondary">
+            <th class="px-4 py-2">Seq</th>
+            <th class="px-4 py-2">Code</th>
+            <th class="px-4 py-2">Title</th>
+            <th class="px-4 py-2">Location</th>
+            <th class="px-4 py-2">Angle &amp; camera</th>
+            <th class="px-4 py-2">Audio</th>
+            <th class="px-4 py-2">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let asset of group.assets" class="border-b border-border last:border-0 hover:bg-surface-hover">
+            <td class="px-4 py-2 text-text-secondary">{{ asset.sequenceNumber }}</td>
+            <td class="px-4 py-2 font-mono">{{ asset.code }}</td>
+            <td class="px-4 py-2 font-medium">{{ asset.title }}</td>
+            <td class="px-4 py-2 text-text-secondary">{{ asset.attributes['Location'] }}</td>
+            <td class="px-4 py-2 text-text-secondary">{{ asset.attributes['AngleAndCamera'] }}</td>
+            <td class="px-4 py-2 text-text-secondary">{{ asset.attributes['AudioNotes'] }}</td>
+            <td class="px-4 py-2">
+              <span class="rounded-full px-2 py-0.5 text-xs font-medium text-white" [ngClass]="statusPillClass(asset.status)">
+                {{ asset.status }}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 </div>
