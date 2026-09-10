@@ -1,1 +1,21 @@
-/* You can add global styles to this file, and also import other style files */
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0b0f19;
+  --color-surface: #1a2233;
+  --color-surface-hover: #232d42;
+  --color-border: #2a3448;
+  --color-text-primary: #e5e7eb;
+  --color-text-secondary: #94a3b8;
+  --color-accent: #6366f1;
+  --color-accent-hover: #818cf8;
+  --color-status-done: #10b981;
+  --color-status-progress: #f59e0b;
+  --color-status-planned: #64748b;
+  --color-status-error: #f43f5e;
+  --font-sans: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+}
+
+body {
+  @apply m-0 bg-bg text-text-primary font-sans antialiased;
+}
