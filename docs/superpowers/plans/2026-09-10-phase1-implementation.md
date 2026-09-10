@@ -906,3 +906,305 @@ Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
 ```
 
 ---
+
+### Task 4: Episode resource — DTOs, service, controller
+
+**Files:**
+- Create: `src/ProductionBible.Application/Dtos/EpisodeDtos.cs`
+- Create: `src/ProductionBible.Application/Services/IEpisodeService.cs`
+- Create: `src/ProductionBible.Application/Services/EpisodeService.cs`
+- Create: `src/ProductionBible.Api/Controllers/EpisodesController.cs`
+- Test: `tests/ProductionBible.Application.Tests/EpisodeServiceTests.cs`
+
+**Interfaces:**
+- Consumes: `ProductionBibleDbContext` (Task 2), `Project` entity (Task 2).
+- Produces: `IEpisodeService` with `GetByProjectAsync(int projectId)`, `GetByIdAsync(int id)`, `CreateAsync(int projectId, CreateEpisodeRequest)`, `UpdateAsync(int id, UpdateEpisodeRequest)`, `DeleteAsync(int id)`.
+
+- [ ] **Step 1: Write the DTOs**
+
+`src/ProductionBible.Application/Dtos/EpisodeDtos.cs`:
+
+```csharp
+namespace ProductionBible.Application.Dtos;
+
+public record EpisodeDto(int Id, int ProjectId, string Name, int OrderIndex);
+
+public record CreateEpisodeRequest(string Name, int OrderIndex);
+
+public record UpdateEpisodeRequest(string Name, int OrderIndex);
+```
+
+- [ ] **Step 2: Write the failing service test**
+
+`tests/ProductionBible.Application.Tests/EpisodeServiceTests.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Entities;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Application.Tests;
+
+public class EpisodeServiceTests
+{
+    private static ProductionBibleDbContext CreateInMemoryContext()
+    {
+        var options = new DbContextOptionsBuilder<ProductionBibleDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new ProductionBibleDbContext(options);
+    }
+
+    private static async Task<int> SeedProjectAsync(ProductionBibleDbContext context)
+    {
+        var project = new Project { Name = "HalfNut ELS" };
+        context.Projects.Add(project);
+        await context.SaveChangesAsync();
+        return project.Id;
+    }
+
+    [Fact]
+    public async Task CreateAsync_then_GetByIdAsync_round_trips_the_episode()
+    {
+        await using var context = CreateInMemoryContext();
+        var projectId = await SeedProjectAsync(context);
+        var service = new EpisodeService(context);
+
+        var created = await service.CreateAsync(projectId, new CreateEpisodeRequest("EP1", 1));
+
+        Assert.True(created.Id > 0);
+        Assert.Equal(projectId, created.ProjectId);
+
+        var fetched = await service.GetByIdAsync(created.Id);
+        Assert.NotNull(fetched);
+        Assert.Equal("EP1", fetched!.Name);
+        Assert.Equal(1, fetched.OrderIndex);
+    }
+
+    [Fact]
+    public async Task GetByProjectAsync_returns_only_that_projects_episodes_in_order()
+    {
+        await using var context = CreateInMemoryContext();
+        var projectAId = await SeedProjectAsync(context);
+        var projectBId = await SeedProjectAsync(context);
+        var service = new EpisodeService(context);
+        await service.CreateAsync(projectAId, new CreateEpisodeRequest("EP2", 2));
+        await service.CreateAsync(projectAId, new CreateEpisodeRequest("EP1", 1));
+        await service.CreateAsync(projectBId, new CreateEpisodeRequest("Other Project EP1", 1));
+
+        var episodes = await service.GetByProjectAsync(projectAId);
+
+        Assert.Equal(2, episodes.Count);
+        Assert.Equal("EP1", episodes[0].Name);
+        Assert.Equal("EP2", episodes[1].Name);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_changes_name_and_order()
+    {
+        await using var context = CreateInMemoryContext();
+        var projectId = await SeedProjectAsync(context);
+        var service = new EpisodeService(context);
+        var created = await service.CreateAsync(projectId, new CreateEpisodeRequest("Draft Name", 1));
+
+        var updated = await service.UpdateAsync(created.Id, new UpdateEpisodeRequest("EP1", 1));
+
+        Assert.NotNull(updated);
+        Assert.Equal("EP1", updated!.Name);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_removes_the_episode()
+    {
+        await using var context = CreateInMemoryContext();
+        var projectId = await SeedProjectAsync(context);
+        var service = new EpisodeService(context);
+        var created = await service.CreateAsync(projectId, new CreateEpisodeRequest("EP1", 1));
+
+        var deleted = await service.DeleteAsync(created.Id);
+        var fetched = await service.GetByIdAsync(created.Id);
+
+        Assert.True(deleted);
+        Assert.Null(fetched);
+    }
+}
+```
+
+- [ ] **Step 3: Run the tests to verify they fail**
+
+```bash
+dotnet test tests/ProductionBible.Application.Tests --filter EpisodeServiceTests
+```
+
+Expected: FAIL to compile — `IEpisodeService`/`EpisodeService` don't exist yet.
+
+- [ ] **Step 4: Write the service interface and implementation**
+
+`src/ProductionBible.Application/Services/IEpisodeService.cs`:
+
+```csharp
+using ProductionBible.Application.Dtos;
+
+namespace ProductionBible.Application.Services;
+
+public interface IEpisodeService
+{
+    Task<IReadOnlyList<EpisodeDto>> GetByProjectAsync(int projectId);
+    Task<EpisodeDto?> GetByIdAsync(int id);
+    Task<EpisodeDto> CreateAsync(int projectId, CreateEpisodeRequest request);
+    Task<EpisodeDto?> UpdateAsync(int id, UpdateEpisodeRequest request);
+    Task<bool> DeleteAsync(int id);
+}
+```
+
+`src/ProductionBible.Application/Services/EpisodeService.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using ProductionBible.Application.Data;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Entities;
+
+namespace ProductionBible.Application.Services;
+
+public class EpisodeService : IEpisodeService
+{
+    private readonly ProductionBibleDbContext _db;
+
+    public EpisodeService(ProductionBibleDbContext db)
+    {
+        _db = db;
+    }
+
+    private static EpisodeDto ToDto(Episode e) => new(e.Id, e.ProjectId, e.Name, e.OrderIndex);
+
+    public async Task<IReadOnlyList<EpisodeDto>> GetByProjectAsync(int projectId)
+    {
+        return await _db.Episodes
+            .Where(e => e.ProjectId == projectId)
+            .OrderBy(e => e.OrderIndex)
+            .Select(e => new EpisodeDto(e.Id, e.ProjectId, e.Name, e.OrderIndex))
+            .ToListAsync();
+    }
+
+    public async Task<EpisodeDto?> GetByIdAsync(int id)
+    {
+        var episode = await _db.Episodes.FindAsync(id);
+        return episode is null ? null : ToDto(episode);
+    }
+
+    public async Task<EpisodeDto> CreateAsync(int projectId, CreateEpisodeRequest request)
+    {
+        var episode = new Episode { ProjectId = projectId, Name = request.Name, OrderIndex = request.OrderIndex };
+        _db.Episodes.Add(episode);
+        await _db.SaveChangesAsync();
+        return ToDto(episode);
+    }
+
+    public async Task<EpisodeDto?> UpdateAsync(int id, UpdateEpisodeRequest request)
+    {
+        var episode = await _db.Episodes.FindAsync(id);
+        if (episode is null) return null;
+
+        episode.Name = request.Name;
+        episode.OrderIndex = request.OrderIndex;
+        await _db.SaveChangesAsync();
+        return ToDto(episode);
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var episode = await _db.Episodes.FindAsync(id);
+        if (episode is null) return false;
+
+        _db.Episodes.Remove(episode);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+}
+```
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+```bash
+dotnet test tests/ProductionBible.Application.Tests --filter EpisodeServiceTests
+```
+
+Expected: PASS, 4 tests.
+
+- [ ] **Step 6: Write the controller**
+
+`src/ProductionBible.Api/Controllers/EpisodesController.cs`:
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using ProductionBible.Application.Dtos;
+using ProductionBible.Application.Services;
+
+namespace ProductionBible.Api.Controllers;
+
+[ApiController]
+public class EpisodesController : ControllerBase
+{
+    private readonly IEpisodeService _service;
+
+    public EpisodesController(IEpisodeService service)
+    {
+        _service = service;
+    }
+
+    [HttpGet("api/projects/{projectId:int}/episodes")]
+    public async Task<ActionResult<IReadOnlyList<EpisodeDto>>> GetByProject(int projectId)
+        => Ok(await _service.GetByProjectAsync(projectId));
+
+    [HttpGet("api/episodes/{id:int}")]
+    public async Task<ActionResult<EpisodeDto>> GetById(int id)
+    {
+        var episode = await _service.GetByIdAsync(id);
+        return episode is null ? NotFound() : Ok(episode);
+    }
+
+    [HttpPost("api/projects/{projectId:int}/episodes")]
+    public async Task<ActionResult<EpisodeDto>> Create(int projectId, CreateEpisodeRequest request)
+    {
+        var created = await _service.CreateAsync(projectId, request);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    [HttpPut("api/episodes/{id:int}")]
+    public async Task<ActionResult<EpisodeDto>> Update(int id, UpdateEpisodeRequest request)
+    {
+        var updated = await _service.UpdateAsync(id, request);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("api/episodes/{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var deleted = await _service.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
+    }
+}
+```
+
+- [ ] **Step 7: Build to verify the controller compiles**
+
+```bash
+dotnet build src/ProductionBible.Api
+```
+
+Expected: builds.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add -A
+git commit -m "Add Episode CRUD: service, controller, and service tests
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AJCRA8DYyZtpzqCVs7dmvp"
+```
+
+---
