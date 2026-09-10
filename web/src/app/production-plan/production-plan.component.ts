@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { forkJoin } from 'rxjs';
 import { ApiClientService } from '../core/api-client.service';
@@ -18,7 +18,7 @@ interface PhaseGroup {
 export class ProductionPlanComponent implements OnInit {
   groups: PhaseGroup[] = [];
 
-  constructor(private readonly api: ApiClientService) {}
+  constructor(private readonly api: ApiClientService, private readonly cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
     this.api.getProjects().subscribe((projects) => {
@@ -28,13 +28,17 @@ export class ProductionPlanComponent implements OnInit {
       this.api.getEpisodes(project.id).subscribe((episodes) => {
         if (episodes.length === 0) {
           this.groups = [];
+          this.cdr.markForCheck();
           return;
         }
 
         forkJoin(episodes.map((episode) => this.api.getAssets(episode.id))).subscribe((assetLists) => {
           this.groups = this.buildGroups(assetLists.flat());
+          this.cdr.markForCheck();
         });
+        this.cdr.markForCheck();
       });
+      this.cdr.markForCheck();
     });
   }
 

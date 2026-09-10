@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
@@ -18,7 +18,7 @@ export class BibleComponent implements OnInit {
   assets: AssetDto[] = [];
   viewMode: 'list' | 'timeline' = 'list';
 
-  constructor(private readonly api: ApiClientService) {}
+  constructor(private readonly api: ApiClientService, private readonly cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
     this.api.getProjects().subscribe((projects) => {
@@ -29,14 +29,22 @@ export class BibleComponent implements OnInit {
         if (episodes.length > 0) {
           this.selectEpisode(episodes[0].id);
         }
+        this.cdr.markForCheck();
       });
+      this.cdr.markForCheck();
     });
   }
 
   selectEpisode(episodeId: number): void {
     this.selectedEpisodeId = episodeId;
-    this.api.getBeats(episodeId).subscribe((beats) => (this.beats = beats));
-    this.api.getAssets(episodeId).subscribe((assets) => (this.assets = assets));
+    this.api.getBeats(episodeId).subscribe((beats) => {
+      this.beats = beats;
+      this.cdr.markForCheck();
+    });
+    this.api.getAssets(episodeId).subscribe((assets) => {
+      this.assets = assets;
+      this.cdr.markForCheck();
+    });
   }
 
   assetsForBeat(beat: BeatDto): AssetDto[] {
@@ -85,6 +93,7 @@ export class BibleComponent implements OnInit {
         this.assets[index] = updated;
       }
       this.editingAssetId = null;
+      this.cdr.markForCheck();
     });
   }
 }
