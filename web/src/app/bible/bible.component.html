@@ -1,0 +1,50 @@
+<div class="bible-view">
+  <div class="episode-picker">
+    <label for="episode-select">Episode</label>
+    <select id="episode-select" [ngModel]="selectedEpisodeId" (ngModelChange)="selectEpisode($event)">
+      <option *ngFor="let ep of episodes" [ngValue]="ep.id">{{ ep.name }}</option>
+    </select>
+    <button type="button" (click)="toggleTimeline()">
+      {{ viewMode === 'list' ? 'Show Timeline' : 'Show List' }}
+    </button>
+  </div>
+
+  <ng-container *ngIf="viewMode === 'list'">
+    <section class="beat" *ngFor="let beat of beats">
+      <h3>{{ beat.timecode }} — {{ beat.purpose }}</h3>
+      <ul>
+        <li *ngFor="let asset of assetsForBeat(beat)">
+          <strong>{{ asset.code }}</strong> — {{ asset.title }} ({{ asset.assetTypeName }}, {{ asset.status }})
+          <span *ngIf="asset.notes"> — {{ asset.notes }}</span>
+          <ng-container *ngIf="editingAssetId === asset.id">
+            <div class="asset-edit">
+              <label>Status <input type="text" [(ngModel)]="editStatus" /></label>
+              <label>Notes <textarea [(ngModel)]="editNotes"></textarea></label>
+              <button type="button" (click)="saveEdit(asset)">Save</button>
+              <button type="button" (click)="cancelEdit()">Cancel</button>
+            </div>
+          </ng-container>
+          <button type="button" *ngIf="editingAssetId !== asset.id" (click)="startEdit(asset)">Edit</button>
+        </li>
+      </ul>
+    </section>
+    <section class="beat unassigned" *ngIf="unassignedAssets.length > 0">
+      <h3>Unassigned</h3>
+      <ul>
+        <li *ngFor="let asset of unassignedAssets">
+          <strong>{{ asset.code }}</strong> — {{ asset.title }} ({{ asset.assetTypeName }}, {{ asset.status }})
+          <span *ngIf="asset.notes"> — {{ asset.notes }}</span>
+          <ng-container *ngIf="editingAssetId === asset.id">
+            <div class="asset-edit">
+              <label>Status <input type="text" [(ngModel)]="editStatus" /></label>
+              <label>Notes <textarea [(ngModel)]="editNotes"></textarea></label>
+              <button type="button" (click)="saveEdit(asset)">Save</button>
+              <button type="button" (click)="cancelEdit()">Cancel</button>
+            </div>
+          </ng-container>
+          <button type="button" *ngIf="editingAssetId !== asset.id" (click)="startEdit(asset)">Edit</button>
+        </li>
+      </ul>
+    </section>
+  </ng-container>
+</div>
