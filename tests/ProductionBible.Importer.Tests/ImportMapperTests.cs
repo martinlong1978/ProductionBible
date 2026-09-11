@@ -142,4 +142,41 @@ public class ImportMapperTests
         Assert.Contains(eLAssets, a => a.Attributes.Any(attr => attr.Key == "StoryboardSceneSetup" && attr.Value.Length > 0));
         Assert.Contains(eLAssets, a => a.Attributes.Any(attr => attr.Key == "StoryboardSetupSection" && attr.Value.Length > 0));
     }
+
+    [Fact]
+    public async Task Computes_Ordinal_and_DurationSeconds_for_EP1_beats_in_parsed_timecode_order()
+    {
+        await using var context = CreateInMemoryContext();
+        var mapper = new ImportMapper(context);
+
+        await mapper.ImportAsync(LoadFixture("storyboard.html"), LoadFixture("production_plan.md"), "HalfNut ELS");
+
+        var ep1Beats = await context.Beats
+            .Include(b => b.Episode)
+            .Where(b => b.Episode!.Name == "EP1")
+            .OrderBy(b => b.Ordinal)
+            .ToListAsync();
+
+        // EP1's Coverage Check table gives these timecodes in order: 00:00, 00:38, 00:50,
+        // 02:00, 04:00, 05:40, 07:20, 09:00, 11:00, 13:30, 16:30, 18:30, 20:30, 21:30, 22:20.
+        var orderedSourceTimecodes = ep1Beats.Select(b => b.SourceTimecode).ToList();
+        Assert.Equal(new List<string>
+        {
+            "00:00", "00:38", "00:50", "02:00", "04:00", "05:40", "07:20", "09:00",
+            "11:00", "13:30", "16:30", "18:30", "20:30", "21:30", "22:20",
+        }, orderedSourceTimecodes);
+
+        // Ordinal is 0-based positional.
+        Assert.Equal(Enumerable.Range(0, ep1Beats.Count).ToList(), ep1Beats.Select(b => b.Ordinal).ToList());
+
+        // 00:00 -> 00:38 is a 38-second gap.
+        Assert.Equal(38, ep1Beats[0].DurationSeconds);
+        // 21:30 -> 22:20 is a 50-second gap.
+        var beatAt2130 = ep1Beats.Single(b => b.SourceTimecode == "21:30");
+        Assert.Equal(50, beatAt2130.DurationSeconds);
+        // The last beat in the episode (22:20) falls back to 60 seconds — no next beat to gap against.
+        var lastBeat = ep1Beats.Last();
+        Assert.Equal("22:20", lastBeat.SourceTimecode);
+        Assert.Equal(60, lastBeat.DurationSeconds);
+    }
 }

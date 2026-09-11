@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ProductionBible.Application;
 using ProductionBible.Application.Data;
 using ProductionBible.Application.Entities;
 
@@ -173,6 +174,11 @@ public class ImportMapper
                     }
                 }
             }
+        }
+
+        foreach (var episodeGroup in _beatsByKey.GroupBy(kv => kv.Key.episodeNumber))
+        {
+            TimecodeOrdering.AssignOrdinalsAndDurations(episodeGroup.Select(kv => kv.Value).ToList());
         }
 
         await _db.SaveChangesAsync();
