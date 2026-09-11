@@ -107,7 +107,7 @@ describe('BibleComponent', () => {
     // onBeatDrop's success callback fetches beats back in the new order.
     apiSpy.getBeats.and.returnValue(of([secondBeat, beat]));
 
-    component.onBeatDrop({ previousIndex: 0, currentIndex: 1 } as any);
+    component.onBeatDrop({ previousIndex: 0, currentIndex: 1, isPointerOverContainer: true } as any);
 
     expect(component.beats.map((b) => b.id)).toEqual([101, 100]);
     expect(apiSpy.reorderBeats).toHaveBeenCalledWith(10, [101, 100]);
@@ -118,19 +118,20 @@ describe('BibleComponent', () => {
     component.assets = [linkedAsset, unlinkedAsset];
     apiSpy.reorderAssetsWithinBeat.and.returnValue(of(undefined));
 
-    component.onAssetDrop(multiBeat, { previousIndex: 0, currentIndex: 1 } as any);
+    component.onAssetDrop(multiBeat, { previousIndex: 0, currentIndex: 1, isPointerOverContainer: true } as any);
 
     expect(multiBeat.assetIds).toEqual([1001, 1000]);
     expect(apiSpy.reorderAssetsWithinBeat).toHaveBeenCalledWith(102, [1001, 1000]);
   });
 
   it('reloads the episode after a successful beat reorder', () => {
-    component.beats = [beat];
+    const secondBeat: BeatDto = { id: 101, episodeId: 10, timecode: '00:38', purpose: 'Next', ordinal: 1, durationSeconds: 30, startSeconds: 38, endSeconds: 68, assetIds: [] };
+    component.beats = [beat, secondBeat];
     apiSpy.reorderBeats.and.returnValue(of(undefined));
     apiSpy.getBeats.calls.reset();
     apiSpy.getAssets.calls.reset();
 
-    component.onBeatDrop({ previousIndex: 0, currentIndex: 0 } as any);
+    component.onBeatDrop({ previousIndex: 0, currentIndex: 1, isPointerOverContainer: true } as any);
 
     expect(apiSpy.getBeats).toHaveBeenCalledWith(10);
     expect(apiSpy.getAssets).toHaveBeenCalledWith(10);

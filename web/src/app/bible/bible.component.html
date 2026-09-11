@@ -23,13 +23,13 @@
   </div>
 
   <ng-container *ngIf="viewMode === 'list'; else timelineTpl">
-    <div cdkDropList (cdkDropListDropped)="onBeatDrop($event)" class="space-y-4">
+    <div cdkDropList [cdkDropListData]="beats" (cdkDropListDropped)="onBeatDrop($event)" class="space-y-6">
       <section *ngFor="let beat of beats" cdkDrag class="rounded-lg border border-border bg-surface p-4">
         <div class="mb-3 flex items-center gap-2">
           <span cdkDragHandle class="cursor-grab select-none text-text-secondary" title="Drag to reorder beat">&#8942;&#8942;</span>
           <h3 class="text-sm font-semibold text-text-secondary">{{ beat.timecode }} &mdash; {{ beat.purpose }}</h3>
         </div>
-        <ul cdkDropList (cdkDropListDropped)="onAssetDrop(beat, $event)" class="space-y-2">
+        <ul cdkDropList [cdkDropListData]="beat.assetIds" (cdkDropListDropped)="onAssetDrop(beat, $event)" class="space-y-2">
           <li *ngFor="let asset of assetsForBeat(beat)" cdkDrag class="rounded-md border border-border bg-bg p-3">
             <div class="flex flex-wrap items-center gap-2">
               <span cdkDragHandle class="cursor-grab select-none text-text-secondary" title="Drag to reorder shot">&#8942;&#8942;</span>

@@ -62,20 +62,30 @@ export class BibleComponent {
   }
 
   onBeatDrop(event: CdkDragDrop<BeatDto[]>): void {
+    if (!event.isPointerOverContainer) return;
+    if (event.previousIndex === event.currentIndex) return;
+    const episodeId = this.selectedEpisodeId;
+    if (episodeId === null) return;
     moveItemInArray(this.beats, event.previousIndex, event.currentIndex);
     const orderedIds = this.beats.map((b) => b.id);
     this.cdr.markForCheck();
-    this.api.reorderBeats(this.selectedEpisodeId!, orderedIds).subscribe(() => {
-      this.selectEpisode(this.selectedEpisodeId!);
+    this.api.reorderBeats(episodeId, orderedIds).subscribe(() => {
+      this.selectEpisode(episodeId);
     });
   }
 
-  onAssetDrop(beat: BeatDto, event: CdkDragDrop<AssetDto[]>): void {
-    moveItemInArray(beat.assetIds, event.previousIndex, event.currentIndex);
-    const orderedIds = [...beat.assetIds];
+  onAssetDrop(beat: BeatDto, event: CdkDragDrop<number[]>): void {
+    if (!event.isPointerOverContainer) return;
+    if (event.previousIndex === event.currentIndex) return;
+    const episodeId = this.selectedEpisodeId;
+    if (episodeId === null) return;
+    const orderedIds = this.assetsForBeat(beat).map((a) => a.id);
+    if (orderedIds.length !== beat.assetIds.length) return;
+    moveItemInArray(orderedIds, event.previousIndex, event.currentIndex);
+    beat.assetIds.splice(0, beat.assetIds.length, ...orderedIds);
     this.cdr.markForCheck();
-    this.api.reorderAssetsWithinBeat(beat.id, orderedIds).subscribe(() => {
-      this.selectEpisode(this.selectedEpisodeId!);
+    this.api.reorderAssetsWithinBeat(beat.id, [...orderedIds]).subscribe(() => {
+      this.selectEpisode(episodeId);
     });
   }
 
