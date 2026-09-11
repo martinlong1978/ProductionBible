@@ -15,7 +15,8 @@ public record AssetDto(
     int? PhaseId,
     DateTime? CompletedAtUtc,
     Dictionary<string, string> Attributes,
-    int[] BeatIds);
+    int[] BeatIds,
+    int? OrderInPhase);
 
 public record CreateAssetRequest(
     int AssetTypeId,

@@ -116,7 +116,7 @@ public class AssetService : IAssetService
 
         for (var i = 0; i < orderedAssetIds.Length; i++)
         {
-            assetsById[orderedAssetIds[i]].SequenceNumber = i;
+            assetsById[orderedAssetIds[i]].OrderInPhase = i;
         }
 
         await _db.SaveChangesAsync();
@@ -177,5 +177,6 @@ public class AssetService : IAssetService
         asset.PhaseId,
         asset.CompletedAtUtc,
         asset.Attributes.ToDictionary(a => a.Key, a => a.Value),
-        asset.AssetBeats.Select(ab => ab.BeatId).ToArray());
+        asset.AssetBeats.Select(ab => ab.BeatId).ToArray(),
+        asset.OrderInPhase);
 }

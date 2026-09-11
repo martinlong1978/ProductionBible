@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ProductionBible.Application.Data;
 
@@ -10,9 +11,11 @@ using ProductionBible.Application.Data;
 namespace ProductionBible.Application.Migrations
 {
     [DbContext(typeof(ProductionBibleDbContext))]
-    partial class ProductionBibleDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260911220214_AddOrderInPhaseToAsset")]
+    partial class AddOrderInPhaseToAsset
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");

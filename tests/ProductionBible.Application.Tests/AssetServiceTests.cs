@@ -181,7 +181,7 @@ public class AssetServiceTests
     }
 
     [Fact]
-    public async Task ReorderWithinPhaseAsync_reassigns_SequenceNumber_to_match_the_given_order()
+    public async Task ReorderWithinPhaseAsync_reassigns_OrderInPhase_to_match_the_given_order()
     {
         await using var context = CreateInMemoryContext();
         var (episodeId, assetTypeId, _) = await SeedAsync(context);
@@ -201,8 +201,37 @@ public class AssetServiceTests
         Assert.True(result);
         var reorderedB = await service.GetByIdAsync(assetB.Id);
         var reorderedA = await service.GetByIdAsync(assetA.Id);
-        Assert.Equal(0, reorderedB!.SequenceNumber);
-        Assert.Equal(1, reorderedA!.SequenceNumber);
+        Assert.Equal(0, reorderedB!.OrderInPhase);
+        Assert.Equal(1, reorderedA!.OrderInPhase);
+    }
+
+    [Fact]
+    public async Task ReorderWithinPhaseAsync_leaves_SequenceNumber_untouched()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, _) = await SeedAsync(context);
+        var project = (await context.Episodes.FindAsync(episodeId))!.Project;
+        var phase = new Phase { Project = project, Name = "Setup A", OrderIndex = 0 };
+        context.Phases.Add(phase);
+        await context.SaveChangesAsync();
+        var service = new AssetService(context);
+        var assetA = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-01", "A", null, "Planned", null, SequenceNumber: 40, TargetLengthSeconds: null,
+            Attributes: null, BeatIds: null));
+        var assetB = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-02", "B", null, "Planned", null, SequenceNumber: 41, TargetLengthSeconds: null,
+            Attributes: null, BeatIds: null));
+        (await context.Assets.FindAsync(assetA.Id))!.PhaseId = phase.Id;
+        (await context.Assets.FindAsync(assetB.Id))!.PhaseId = phase.Id;
+        await context.SaveChangesAsync();
+
+        var result = await service.ReorderWithinPhaseAsync(phase.Id, new[] { assetB.Id, assetA.Id });
+
+        Assert.True(result);
+        var reorderedA = await service.GetByIdAsync(assetA.Id);
+        var reorderedB = await service.GetByIdAsync(assetB.Id);
+        Assert.Equal(40, reorderedA!.SequenceNumber);
+        Assert.Equal(41, reorderedB!.SequenceNumber);
     }
 
     [Fact]
@@ -248,8 +277,8 @@ public class AssetServiceTests
         Assert.False(result);
         var unchangedA = await service.GetByIdAsync(assetA.Id);
         var unchangedB = await service.GetByIdAsync(assetB.Id);
-        Assert.Equal(assetA.SequenceNumber, unchangedA!.SequenceNumber);
-        Assert.Equal(assetB.SequenceNumber, unchangedB!.SequenceNumber);
+        Assert.Null(unchangedA!.OrderInPhase);
+        Assert.Null(unchangedB!.OrderInPhase);
     }
 
     [Fact]
