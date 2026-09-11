@@ -13,9 +13,19 @@ export class ProjectContextService {
   readonly selectedProjectId = this.selectedProjectIdSignal.asReadonly();
 
   constructor(private readonly api: ApiClientService) {
+    this.refresh();
+  }
+
+  refresh(): void {
     this.api.getProjects().subscribe((projects) => {
       this.projectsSignal.set(projects);
-      if (projects.length === 0) return;
+      if (projects.length === 0) {
+        this.selectedProjectIdSignal.set(null);
+        return;
+      }
+
+      const currentId = this.selectedProjectIdSignal();
+      if (currentId !== null && projects.some((p) => p.id === currentId)) return;
 
       const storedId = this.readStoredId();
       const match = storedId !== null && projects.some((p) => p.id === storedId);
