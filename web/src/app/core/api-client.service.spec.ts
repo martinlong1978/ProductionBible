@@ -48,7 +48,7 @@ describe('ApiClientService', () => {
     service.updateAsset(7, {
       assetTypeId: 1, code: 'A-01', title: 'Title', scriptText: null,
       status: 'Shot', notes: 'Went well', sequenceNumber: 1, targetLengthSeconds: null,
-      attributes: null, beatIds: null,
+      phaseId: null, attributes: null, beatIds: null,
     }).subscribe();
 
     const req = httpMock.expectOne('/api/assets/7');

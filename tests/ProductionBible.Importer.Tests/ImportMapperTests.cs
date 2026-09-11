@@ -45,7 +45,7 @@ public class ImportMapperTests
         var f01 = await context.Assets
             .Include(a => a.AssetBeats).ThenInclude(ab => ab.Beat)
             .SingleAsync(a => a.Code == "F-01");
-        var timecodes = f01.AssetBeats.Select(ab => ab.Beat!.Timecode).OrderBy(t => t).ToList();
+        var timecodes = f01.AssetBeats.Select(ab => ab.Beat!.SourceTimecode).OrderBy(t => t).ToList();
         Assert.Equal(new List<string> { "00:00", "22:30" }, timecodes);
     }
 
@@ -79,7 +79,7 @@ public class ImportMapperTests
         Assert.Null(g1.SequenceNumber);
 
         // Coverage Check table, EP1: "02:00 B-05 + G1" and "07:20 G1" — g1_gears covers both.
-        var timecodes = g1.AssetBeats.Select(ab => ab.Beat!.Timecode).OrderBy(t => t).ToList();
+        var timecodes = g1.AssetBeats.Select(ab => ab.Beat!.SourceTimecode).OrderBy(t => t).ToList();
         Assert.Equal(new List<string> { "02:00", "07:20" }, timecodes);
     }
 
@@ -95,7 +95,7 @@ public class ImportMapperTests
         var beat = await context.Beats
             .Include(b => b.AssetBeats).ThenInclude(ab => ab.Asset)
             .Include(b => b.Episode)
-            .SingleAsync(b => b.Episode!.Name == "EP1" && b.Timecode == "16:30");
+            .SingleAsync(b => b.Episode!.Name == "EP1" && b.SourceTimecode == "16:30");
 
         var orderedCodes = beat.AssetBeats
             .Where(ab => ab.OrderInBeat != null)
@@ -141,5 +141,67 @@ public class ImportMapperTests
         // a mapping defect.)
         Assert.Contains(eLAssets, a => a.Attributes.Any(attr => attr.Key == "StoryboardSceneSetup" && attr.Value.Length > 0));
         Assert.Contains(eLAssets, a => a.Attributes.Any(attr => attr.Key == "StoryboardSetupSection" && attr.Value.Length > 0));
+    }
+
+    [Fact]
+    public async Task Computes_Ordinal_and_DurationSeconds_for_EP1_beats_in_parsed_timecode_order()
+    {
+        await using var context = CreateInMemoryContext();
+        var mapper = new ImportMapper(context);
+
+        await mapper.ImportAsync(LoadFixture("storyboard.html"), LoadFixture("production_plan.md"), "HalfNut ELS");
+
+        var ep1Beats = await context.Beats
+            .Include(b => b.Episode)
+            .Where(b => b.Episode!.Name == "EP1")
+            .OrderBy(b => b.Ordinal)
+            .ToListAsync();
+
+        // EP1's Coverage Check table gives these timecodes in order: 00:00, 00:38, 00:50,
+        // 02:00, 04:00, 05:40, 07:20, 09:00, 11:00, 13:30, 16:30, 18:30, 20:30, 21:30, 22:20.
+        var orderedSourceTimecodes = ep1Beats.Select(b => b.SourceTimecode).ToList();
+        Assert.Equal(new List<string>
+        {
+            "00:00", "00:38", "00:50", "02:00", "04:00", "05:40", "07:20", "09:00",
+            "11:00", "13:30", "16:30", "18:30", "20:30", "21:30", "22:20",
+        }, orderedSourceTimecodes);
+
+        // Ordinal is 0-based positional.
+        Assert.Equal(Enumerable.Range(0, ep1Beats.Count).ToList(), ep1Beats.Select(b => b.Ordinal).ToList());
+
+        // 00:00 -> 00:38 is a 38-second gap.
+        Assert.Equal(38, ep1Beats[0].DurationSeconds);
+        // 21:30 -> 22:20 is a 50-second gap.
+        var beatAt2130 = ep1Beats.Single(b => b.SourceTimecode == "21:30");
+        Assert.Equal(50, beatAt2130.DurationSeconds);
+        // The last beat in the episode (22:20) falls back to 60 seconds — no next beat to gap against.
+        var lastBeat = ep1Beats.Last();
+        Assert.Equal("22:20", lastBeat.SourceTimecode);
+        Assert.Equal(60, lastBeat.DurationSeconds);
+    }
+
+    [Fact]
+    public async Task Shot_pages_get_a_real_Phase_row_instead_of_a_PhaseGroup_attribute()
+    {
+        await using var context = CreateInMemoryContext();
+        var mapper = new ImportMapper(context);
+
+        await mapper.ImportAsync(LoadFixture("storyboard.html"), LoadFixture("production_plan.md"), "HalfNut ELS");
+
+        var a01 = await context.Assets
+            .Include(a => a.Attributes)
+            .Include(a => a.Phase)
+            .SingleAsync(a => a.Code == "A-01");
+
+        Assert.NotNull(a01.Phase);
+        Assert.DoesNotContain(a01.Attributes, attr => attr.Key == "PhaseGroup");
+
+        // Two production_plan.md pages that share a phase (both "Setup A" shots, per the
+        // fixture) resolve to the SAME Phase row, not two separate rows with the same name.
+        var a02 = await context.Assets.Include(a => a.Phase).SingleAsync(a => a.Code == "A-02");
+        Assert.Equal(a01.PhaseId, a02.PhaseId);
+
+        var phaseCount = await context.Phases.CountAsync();
+        Assert.True(phaseCount > 0);
     }
 }

@@ -9,4 +9,5 @@ public interface IBeatService
     Task<BeatDto> CreateAsync(int episodeId, CreateBeatRequest request);
     Task<BeatDto?> UpdateAsync(int id, UpdateBeatRequest request);
     Task<bool> DeleteAsync(int id);
+    Task<bool> ReorderAsync(int episodeId, int[] orderedBeatIds);
 }

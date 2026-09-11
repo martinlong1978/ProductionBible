@@ -24,7 +24,7 @@ describe('buildTimeline', () => {
     return {
       id, episodeId: 1, assetTypeId: 1, assetTypeName, code, title: code,
       scriptText: null, status: 'Planned', notes: null, sequenceNumber: null,
-      targetLengthSeconds: null, completedAtUtc: null, attributes: attrs, beatIds: [],
+      targetLengthSeconds: null, phaseId: null, completedAtUtc: null, attributes: attrs, beatIds: [],
     };
   }
 

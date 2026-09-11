@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ProductionBible.Application.Data;
 
@@ -10,9 +11,11 @@ using ProductionBible.Application.Data;
 namespace ProductionBible.Application.Migrations
 {
     [DbContext(typeof(ProductionBibleDbContext))]
-    partial class ProductionBibleDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260911124510_RenameBeatTimecodeAddOrdinalAndDuration")]
+    partial class RenameBeatTimecodeAddOrdinalAndDuration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -39,9 +42,6 @@ namespace ProductionBible.Application.Migrations
                     b.Property<string>("Notes")
                         .HasColumnType("TEXT");
 
-                    b.Property<int?>("PhaseId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("ScriptText")
                         .HasColumnType("TEXT");
 
@@ -66,8 +66,6 @@ namespace ProductionBible.Application.Migrations
                     b.HasIndex("Code");
 
                     b.HasIndex("EpisodeId");
-
-                    b.HasIndex("PhaseId");
 
                     b.ToTable("Assets");
                 });
@@ -185,29 +183,6 @@ namespace ProductionBible.Application.Migrations
                     b.ToTable("Episodes");
                 });
 
-            modelBuilder.Entity("ProductionBible.Application.Entities.Phase", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("OrderIndex")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("ProjectId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.ToTable("Phases");
-                });
-
             modelBuilder.Entity("ProductionBible.Application.Entities.Project", b =>
                 {
                     b.Property<int>("Id")
@@ -240,15 +215,9 @@ namespace ProductionBible.Application.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("ProductionBible.Application.Entities.Phase", "Phase")
-                        .WithMany("Assets")
-                        .HasForeignKey("PhaseId");
-
                     b.Navigation("AssetType");
 
                     b.Navigation("Episode");
-
-                    b.Navigation("Phase");
                 });
 
             modelBuilder.Entity("ProductionBible.Application.Entities.AssetAttribute", b =>
@@ -303,17 +272,6 @@ namespace ProductionBible.Application.Migrations
                     b.Navigation("Project");
                 });
 
-            modelBuilder.Entity("ProductionBible.Application.Entities.Phase", b =>
-                {
-                    b.HasOne("ProductionBible.Application.Entities.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
             modelBuilder.Entity("ProductionBible.Application.Entities.Asset", b =>
                 {
                     b.Navigation("AssetBeats");
@@ -331,11 +289,6 @@ namespace ProductionBible.Application.Migrations
                     b.Navigation("Assets");
 
                     b.Navigation("Beats");
-                });
-
-            modelBuilder.Entity("ProductionBible.Application.Entities.Phase", b =>
-                {
-                    b.Navigation("Assets");
                 });
 
             modelBuilder.Entity("ProductionBible.Application.Entities.Project", b =>

@@ -11,7 +11,7 @@ function asset(id: number, code: string, sequenceNumber: number, phase: string |
   return {
     id, episodeId, assetTypeId: 1, assetTypeName: 'Shot', code, title: code,
     scriptText: null, status: 'Planned', notes: null, sequenceNumber, targetLengthSeconds: null,
-    completedAtUtc: null, attributes: phase ? { PhaseGroup: phase } : {}, beatIds: [],
+    phaseId: null, completedAtUtc: null, attributes: phase ? { PhaseGroup: phase } : {}, beatIds: [],
   };
 }
 

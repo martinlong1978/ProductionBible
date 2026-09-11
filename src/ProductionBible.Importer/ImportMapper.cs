@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ProductionBible.Application;
 using ProductionBible.Application.Data;
 using ProductionBible.Application.Entities;
 
@@ -11,6 +12,7 @@ public class ImportMapper
     private readonly Dictionary<string, AssetType> _assetTypesByName = new();
     private readonly Dictionary<(int episodeNumber, string timecode), Beat> _beatsByKey = new();
     private readonly Dictionary<(int episodeNumber, string code), Asset> _assetsByEpisodeAndCode = new();
+    private readonly Dictionary<string, Phase> _phasesByKey = new();
 
     public ImportMapper(ProductionBibleDbContext db)
     {
@@ -60,7 +62,7 @@ public class ImportMapper
             AddAttribute(asset, "AudioNotes", page.AudioNotes);
             AddAttribute(asset, "TargetLengthRaw", page.TargetLengthRaw);
             AddAttribute(asset, "AdditionalConsiderations", page.AdditionalConsiderations);
-            AddAttribute(asset, "PhaseGroup", page.PhaseGroup);
+            asset.Phase = GetOrCreatePhase(project, page.PhaseGroup);
 
             if (shotRowsByCode.TryGetValue(normalizedCode, out var shotRow))
             {
@@ -175,6 +177,11 @@ public class ImportMapper
             }
         }
 
+        foreach (var episodeGroup in _beatsByKey.GroupBy(kv => kv.Key.episodeNumber))
+        {
+            TimecodeOrdering.AssignOrdinalsAndDurations(episodeGroup.Select(kv => kv.Value).ToList());
+        }
+
         await _db.SaveChangesAsync();
         return project;
     }
@@ -198,6 +205,15 @@ public class ImportMapper
         return episode;
     }
 
+    private Phase GetOrCreatePhase(Project project, string name)
+    {
+        if (_phasesByKey.TryGetValue(name, out var existing)) return existing;
+        var phase = new Phase { Project = project, Name = name, OrderIndex = _phasesByKey.Count };
+        _phasesByKey[name] = phase;
+        _db.Phases.Add(phase);
+        return phase;
+    }
+
     private AssetType GetOrCreateAssetType(string name)
     {
         if (_assetTypesByName.TryGetValue(name, out var existing)) return existing;
@@ -212,7 +228,7 @@ public class ImportMapper
         var key = (episodeNumber, timecode);
         if (_beatsByKey.TryGetValue(key, out var existing)) return existing;
         var episode = GetOrCreateEpisode(project, episodeNumber);
-        var beat = new Beat { Episode = episode, Timecode = timecode, Purpose = purpose };
+        var beat = new Beat { Episode = episode, SourceTimecode = timecode, Purpose = purpose };
         _beatsByKey[key] = beat;
         _db.Beats.Add(beat);
         return beat;

@@ -36,6 +36,7 @@ export interface AssetDto {
   notes: string | null;
   sequenceNumber: number | null;
   targetLengthSeconds: number | null;
+  phaseId: number | null;
   completedAtUtc: string | null;
   attributes: Record<string, string>;
   beatIds: number[];
@@ -50,6 +51,7 @@ export interface UpdateAssetRequest {
   notes: string | null;
   sequenceNumber: number | null;
   targetLengthSeconds: number | null;
+  phaseId: number | null;
   attributes: Record<string, string> | null;
   beatIds: number[] | null;
 }

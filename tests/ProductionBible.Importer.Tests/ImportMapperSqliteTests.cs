@@ -61,7 +61,7 @@ public class ImportMapperSqliteTests : IDisposable
         var beat = await context.Beats
             .Include(b => b.AssetBeats).ThenInclude(ab => ab.Asset)
             .Include(b => b.Episode)
-            .SingleAsync(b => b.Episode!.Name == "EP1" && b.Timecode == "16:30");
+            .SingleAsync(b => b.Episode!.Name == "EP1" && b.SourceTimecode == "16:30");
 
         var orderedCodes = beat.AssetBeats
             .Where(ab => ab.OrderInBeat != null)
@@ -90,7 +90,7 @@ public class ImportMapperSqliteTests : IDisposable
         var beat = await context.Beats
             .Include(b => b.AssetBeats).ThenInclude(ab => ab.Asset)
             .Include(b => b.Episode)
-            .SingleAsync(b => b.Episode!.Name == "EP1" && b.Timecode == "09:00");
+            .SingleAsync(b => b.Episode!.Name == "EP1" && b.SourceTimecode == "09:00");
 
         var f1Link = Assert.Single(beat.AssetBeats);
         Assert.Equal("f1_notanengineer", f1Link.Asset!.Code);

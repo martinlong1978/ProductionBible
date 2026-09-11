@@ -15,6 +15,8 @@ public class Asset
     public string? Notes { get; set; }
     public int? SequenceNumber { get; set; }
     public int? TargetLengthSeconds { get; set; }
+    public int? PhaseId { get; set; }
+    public Phase? Phase { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
 
     public List<AssetAttribute> Attributes { get; set; } = new();

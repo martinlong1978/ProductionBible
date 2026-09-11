@@ -48,6 +48,7 @@ public class AssetService : IAssetService
             Notes = request.Notes,
             SequenceNumber = request.SequenceNumber,
             TargetLengthSeconds = request.TargetLengthSeconds,
+            PhaseId = request.PhaseId,
         };
         ApplyAttributes(asset, request.Attributes);
         ApplyBeatLinks(asset, request.BeatIds);
@@ -74,6 +75,7 @@ public class AssetService : IAssetService
         asset.Notes = request.Notes;
         asset.SequenceNumber = request.SequenceNumber;
         asset.TargetLengthSeconds = request.TargetLengthSeconds;
+        asset.PhaseId = request.PhaseId;
 
         _db.AssetAttributes.RemoveRange(asset.Attributes);
         asset.Attributes.Clear();
@@ -99,6 +101,42 @@ public class AssetService : IAssetService
         _db.AssetAttributes.RemoveRange(asset.Attributes);
         _db.AssetBeats.RemoveRange(asset.AssetBeats);
         _db.Assets.Remove(asset);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> ReorderWithinPhaseAsync(int phaseId, int[] orderedAssetIds)
+    {
+        var assets = await _db.Assets.Where(a => a.PhaseId == phaseId).ToListAsync();
+        if (assets.Count != orderedAssetIds.Length) return false;
+        if (orderedAssetIds.Distinct().Count() != orderedAssetIds.Length) return false;
+
+        var assetsById = assets.ToDictionary(a => a.Id);
+        if (orderedAssetIds.Any(id => !assetsById.ContainsKey(id))) return false;
+
+        for (var i = 0; i < orderedAssetIds.Length; i++)
+        {
+            assetsById[orderedAssetIds[i]].SequenceNumber = i;
+        }
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> ReorderWithinBeatAsync(int beatId, int[] orderedAssetIds)
+    {
+        var assetBeats = await _db.AssetBeats.Where(ab => ab.BeatId == beatId).ToListAsync();
+        if (assetBeats.Count != orderedAssetIds.Length) return false;
+        if (orderedAssetIds.Distinct().Count() != orderedAssetIds.Length) return false;
+
+        var assetBeatsByAssetId = assetBeats.ToDictionary(ab => ab.AssetId);
+        if (orderedAssetIds.Any(id => !assetBeatsByAssetId.ContainsKey(id))) return false;
+
+        for (var i = 0; i < orderedAssetIds.Length; i++)
+        {
+            assetBeatsByAssetId[orderedAssetIds[i]].OrderInBeat = i;
+        }
+
         await _db.SaveChangesAsync();
         return true;
     }
@@ -136,6 +174,7 @@ public class AssetService : IAssetService
         asset.Notes,
         asset.SequenceNumber,
         asset.TargetLengthSeconds,
+        asset.PhaseId,
         asset.CompletedAtUtc,
         asset.Attributes.ToDictionary(a => a.Key, a => a.Value),
         asset.AssetBeats.Select(ab => ab.BeatId).ToArray());

@@ -30,6 +30,7 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<IEpisodeService, EpisodeService>();
 builder.Services.AddScoped<IAssetTypeService, AssetTypeService>();
 builder.Services.AddScoped<IBeatService, BeatService>();
+builder.Services.AddScoped<IPhaseService, PhaseService>();
 builder.Services.AddScoped<IAssetService, AssetService>();
 
 var app = builder.Build();

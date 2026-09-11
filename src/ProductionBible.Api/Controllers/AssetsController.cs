@@ -45,4 +45,18 @@ public class AssetsController : ControllerBase
         var deleted = await _service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }
+
+    [HttpPatch("api/phases/{phaseId:int}/assets/reorder")]
+    public async Task<IActionResult> ReorderWithinPhase(int phaseId, ReorderRequest request)
+    {
+        var succeeded = await _service.ReorderWithinPhaseAsync(phaseId, request.OrderedIds);
+        return succeeded ? NoContent() : BadRequest();
+    }
+
+    [HttpPatch("api/beats/{beatId:int}/asset-beats/reorder")]
+    public async Task<IActionResult> ReorderWithinBeat(int beatId, ReorderRequest request)
+    {
+        var succeeded = await _service.ReorderWithinBeatAsync(beatId, request.OrderedIds);
+        return succeeded ? NoContent() : BadRequest();
+    }
 }
