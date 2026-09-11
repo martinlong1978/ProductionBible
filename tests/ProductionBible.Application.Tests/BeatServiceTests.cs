@@ -166,6 +166,26 @@ public class BeatServiceTests
         var unchanged = await service.GetByEpisodeAsync(episodeA.Id);
         Assert.Equal(0, unchanged.Single().Ordinal);
     }
+
+    [Fact]
+    public async Task ReorderAsync_rejects_a_duplicate_id_and_writes_nothing()
+    {
+        await using var context = CreateInMemoryContext();
+        var project = new Project { Name = "HalfNut ELS" };
+        var episode = new Episode { Project = project, Name = "EP1", OrderIndex = 1 };
+        var beatA = new Beat { Episode = episode, SourceTimecode = "00:00", Ordinal = 0, DurationSeconds = 60, Purpose = "A" };
+        var beatB = new Beat { Episode = episode, SourceTimecode = "01:00", Ordinal = 1, DurationSeconds = 60, Purpose = "B" };
+        context.Beats.AddRange(beatA, beatB);
+        await context.SaveChangesAsync();
+        var service = new BeatService(context);
+
+        var result = await service.ReorderAsync(episode.Id, new[] { beatA.Id, beatA.Id });
+
+        Assert.False(result);
+        var unchanged = await service.GetByEpisodeAsync(episode.Id);
+        Assert.Equal(0, unchanged.Single(b => b.Purpose == "A").Ordinal);
+        Assert.Equal(1, unchanged.Single(b => b.Purpose == "B").Ordinal);
+    }
 }
 
 public class BeatServiceOrderingTests

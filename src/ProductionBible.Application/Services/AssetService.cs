@@ -107,6 +107,7 @@ public class AssetService : IAssetService
     {
         var assets = await _db.Assets.Where(a => a.PhaseId == phaseId).ToListAsync();
         if (assets.Count != orderedAssetIds.Length) return false;
+        if (orderedAssetIds.Distinct().Count() != orderedAssetIds.Length) return false;
 
         var assetsById = assets.ToDictionary(a => a.Id);
         if (orderedAssetIds.Any(id => !assetsById.ContainsKey(id))) return false;
@@ -124,6 +125,7 @@ public class AssetService : IAssetService
     {
         var assetBeats = await _db.AssetBeats.Where(ab => ab.BeatId == beatId).ToListAsync();
         if (assetBeats.Count != orderedAssetIds.Length) return false;
+        if (orderedAssetIds.Distinct().Count() != orderedAssetIds.Length) return false;
 
         var assetBeatsByAssetId = assetBeats.ToDictionary(ab => ab.AssetId);
         if (orderedAssetIds.Any(id => !assetBeatsByAssetId.ContainsKey(id))) return false;

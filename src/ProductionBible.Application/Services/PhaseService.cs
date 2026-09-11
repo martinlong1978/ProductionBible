@@ -64,6 +64,7 @@ public class PhaseService : IPhaseService
     {
         var phases = await _db.Phases.Where(p => p.ProjectId == projectId).ToListAsync();
         if (phases.Count != orderedPhaseIds.Length) return false;
+        if (orderedPhaseIds.Distinct().Count() != orderedPhaseIds.Length) return false;
 
         var phasesById = phases.ToDictionary(p => p.Id);
         if (orderedPhaseIds.Any(id => !phasesById.ContainsKey(id))) return false;

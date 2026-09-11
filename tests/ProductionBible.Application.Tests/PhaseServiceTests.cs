@@ -105,4 +105,21 @@ public class PhaseServiceTests
         Assert.Equal("Setup C", reordered[0].Name);
         Assert.Equal("Setup A", reordered[1].Name);
     }
+
+    [Fact]
+    public async Task ReorderAsync_rejects_a_duplicate_id_and_writes_nothing()
+    {
+        await using var context = CreateInMemoryContext();
+        var projectId = await SeedProjectAsync(context);
+        var service = new PhaseService(context);
+        var phaseA = await service.CreateAsync(projectId, new CreatePhaseRequest("Setup A", 0));
+        var phaseC = await service.CreateAsync(projectId, new CreatePhaseRequest("Setup C", 1));
+
+        var result = await service.ReorderAsync(projectId, new[] { phaseA.Id, phaseA.Id });
+
+        Assert.False(result);
+        var unchanged = await service.GetByProjectAsync(projectId);
+        Assert.Equal(0, unchanged.Single(p => p.Name == "Setup A").OrderIndex);
+        Assert.Equal(1, unchanged.Single(p => p.Name == "Setup C").OrderIndex);
+    }
 }

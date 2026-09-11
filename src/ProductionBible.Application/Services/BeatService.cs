@@ -93,6 +93,7 @@ public class BeatService : IBeatService
     {
         var beats = await _db.Beats.Where(b => b.EpisodeId == episodeId).ToListAsync();
         if (beats.Count != orderedBeatIds.Length) return false;
+        if (orderedBeatIds.Distinct().Count() != orderedBeatIds.Length) return false;
 
         var beatsById = beats.ToDictionary(b => b.Id);
         if (orderedBeatIds.Any(id => !beatsById.ContainsKey(id))) return false;
