@@ -55,6 +55,12 @@ public class PhaseService : IPhaseService
         var phase = await _db.Phases.FindAsync(id);
         if (phase is null) return false;
 
+        var assets = await _db.Assets.Where(a => a.PhaseId == id).ToListAsync();
+        foreach (var asset in assets)
+        {
+            asset.PhaseId = null;
+        }
+
         _db.Phases.Remove(phase);
         await _db.SaveChangesAsync();
         return true;

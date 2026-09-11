@@ -88,6 +88,7 @@ export class BibleComponent {
       notes: this.editNotes || null,
       sequenceNumber: asset.sequenceNumber,
       targetLengthSeconds: asset.targetLengthSeconds,
+      phaseId: asset.phaseId,
       attributes: asset.attributes,
       beatIds: asset.beatIds,
     };

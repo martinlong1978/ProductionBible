@@ -10,7 +10,7 @@ describe('TimelineViewComponent', () => {
     return {
       id, episodeId: 1, assetTypeId: 1, assetTypeName, code, title: code,
       scriptText: null, status: 'Planned', notes: null, sequenceNumber: null,
-      targetLengthSeconds: null, completedAtUtc: null, attributes: {}, beatIds: [],
+      targetLengthSeconds: null, phaseId: null, completedAtUtc: null, attributes: {}, beatIds: [],
     };
   }
 

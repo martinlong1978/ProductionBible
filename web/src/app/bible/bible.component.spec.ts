@@ -17,7 +17,7 @@ describe('BibleComponent', () => {
   const linkedAsset: AssetDto = {
     id: 1000, episodeId: 10, assetTypeId: 1, assetTypeName: 'Shot', code: 'A-01',
     title: 'Tool entering the work', scriptText: null, status: 'Planned', notes: null,
-    sequenceNumber: 1, targetLengthSeconds: null, completedAtUtc: null, attributes: {}, beatIds: [100],
+    sequenceNumber: 1, targetLengthSeconds: null, phaseId: 5, completedAtUtc: null, attributes: {}, beatIds: [100],
   };
   const unlinkedAsset: AssetDto = { ...linkedAsset, id: 1001, code: 'A-02', beatIds: [] };
 
@@ -91,6 +91,7 @@ describe('BibleComponent', () => {
       notes: 'Went well',
       code: linkedAsset.code,
       beatIds: linkedAsset.beatIds,
+      phaseId: linkedAsset.phaseId,
     }));
     expect(component.assets.find((a) => a.id === linkedAsset.id)?.status).toBe('Shot');
     expect(component.editingAssetId).toBeNull();
