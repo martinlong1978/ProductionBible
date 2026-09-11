@@ -20,7 +20,7 @@
                       class="ml-2 rounded-md border border-border px-2 py-1 text-xs font-medium text-status-error hover:bg-surface-hover">Delete</button>
               <ng-container *ngIf="confirmingDeleteId === episode.id">
                 <button type="button" (click)="confirmDelete(episode.id)"
-                        class="ml-2 rounded-md border border-status-error px-2 py-1 text-xs font-medium text-status-error hover:bg-surface-hover">Really delete?</button>
+                        class="ml-2 rounded-md border border-status-error px-2 py-1 text-xs font-medium text-status-error hover:bg-surface-hover">Really delete? (also deletes all beats and assets)</button>
                 <button type="button" (click)="cancelDelete()"
                         class="ml-2 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-hover">Cancel</button>
               </ng-container>

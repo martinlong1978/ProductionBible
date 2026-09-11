@@ -68,4 +68,17 @@ describe('BeatsTabComponent', () => {
     component.confirmDelete(beat.id);
     expect(apiSpy.deleteBeat).toHaveBeenCalledWith(beat.id);
   });
+
+  it('starts and saves an edit', () => {
+    apiSpy.updateBeat.and.returnValue(of({ ...beat, purpose: 'Renamed beat' }));
+
+    component.startEdit(beat);
+    component.editPurpose = 'Renamed beat';
+    component.saveEdit(beat);
+
+    expect(apiSpy.updateBeat).toHaveBeenCalledWith(beat.id, {
+      timecode: beat.timecode, purpose: 'Renamed beat', ordinal: beat.ordinal, durationSeconds: beat.durationSeconds,
+    });
+    expect(component.editingId).toBeNull();
+  });
 });

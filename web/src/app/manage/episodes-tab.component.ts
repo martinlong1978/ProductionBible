@@ -33,6 +33,8 @@ export class EpisodesTabComponent {
     effect(() => {
       const projectId = this.projectContext.selectedProjectId();
       this.projectId = projectId;
+      this.editingId = null;
+      this.confirmingDeleteId = null;
       if (projectId !== null) this.load(projectId);
       else this.episodes = [];
     });
@@ -40,6 +42,7 @@ export class EpisodesTabComponent {
 
   private load(projectId: number): void {
     this.api.getEpisodes(projectId).subscribe((episodes) => {
+      if (this.projectContext.selectedProjectId() !== projectId) return;
       this.episodes = episodes;
       this.cdr.markForCheck();
     });

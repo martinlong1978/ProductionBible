@@ -57,4 +57,15 @@ describe('PhasesTabComponent', () => {
     component.confirmDelete(phase.id);
     expect(apiSpy.deletePhase).toHaveBeenCalledWith(phase.id);
   });
+
+  it('starts and saves an edit', () => {
+    apiSpy.updatePhase.and.returnValue(of({ ...phase, name: 'Renamed' }));
+
+    component.startEdit(phase);
+    component.editName = 'Renamed';
+    component.saveEdit(phase);
+
+    expect(apiSpy.updatePhase).toHaveBeenCalledWith(phase.id, { name: 'Renamed', orderIndex: phase.orderIndex });
+    expect(component.editingId).toBeNull();
+  });
 });

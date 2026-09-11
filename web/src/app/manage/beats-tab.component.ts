@@ -36,6 +36,8 @@ export class BeatsTabComponent {
   ) {
     effect(() => {
       const projectId = this.projectContext.selectedProjectId();
+      this.editingId = null;
+      this.confirmingDeleteId = null;
       if (projectId !== null) this.loadEpisodes(projectId);
       else {
         this.episodes = [];
@@ -47,6 +49,7 @@ export class BeatsTabComponent {
 
   private loadEpisodes(projectId: number): void {
     this.api.getEpisodes(projectId).subscribe((episodes) => {
+      if (this.projectContext.selectedProjectId() !== projectId) return;
       this.episodes = episodes;
       if (episodes.length > 0) this.selectEpisode(episodes[0].id);
       else {
@@ -59,18 +62,21 @@ export class BeatsTabComponent {
 
   selectEpisode(episodeId: number): void {
     this.selectedEpisodeId = episodeId;
+    this.editingId = null;
+    this.confirmingDeleteId = null;
     this.loadBeats(episodeId);
   }
 
   private loadBeats(episodeId: number): void {
     this.api.getBeats(episodeId).subscribe((beats) => {
+      if (this.selectedEpisodeId !== episodeId) return;
       this.beats = beats;
       this.cdr.markForCheck();
     });
   }
 
   create(): void {
-    if (this.selectedEpisodeId === null) return;
+    if (this.selectedEpisodeId === null || !this.newTimecode.trim()) return;
     this.api.createBeat(this.selectedEpisodeId, {
       timecode: this.newTimecode, purpose: this.newPurpose,
       ordinal: this.newOrdinal, durationSeconds: this.newDurationSeconds,

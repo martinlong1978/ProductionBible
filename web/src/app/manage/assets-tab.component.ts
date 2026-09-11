@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
 import { ProjectContextService } from '../core/project-context.service';
-import { ASSET_STATUSES } from '../core/status-style';
+import { ASSET_STATUSES, statusPillClass } from '../core/status-style';
 import { AssetDto, AssetTypeDto, BeatDto, EpisodeDto, PhaseDto } from '../core/models';
 
 interface AttributeRow {
@@ -25,6 +25,7 @@ export class AssetsTabComponent {
   phases: PhaseDto[] = [];
   beats: BeatDto[] = [];
   protected readonly assetStatuses = ASSET_STATUSES;
+  protected readonly statusPillClass = statusPillClass;
 
   newCode = '';
   newTitle = '';
@@ -60,6 +61,8 @@ export class AssetsTabComponent {
     effect(() => {
       const projectId = this.projectContext.selectedProjectId();
       this.projectId = projectId;
+      this.editingId = null;
+      this.confirmingDeleteId = null;
       if (projectId === null) {
         this.episodes = [];
         this.selectedEpisodeId = null;
@@ -68,6 +71,7 @@ export class AssetsTabComponent {
         return;
       }
       this.api.getPhases(projectId).subscribe((phases) => {
+        if (this.projectId !== projectId) return;
         this.phases = phases;
         this.cdr.markForCheck();
       });
@@ -77,6 +81,7 @@ export class AssetsTabComponent {
 
   private loadEpisodes(projectId: number): void {
     this.api.getEpisodes(projectId).subscribe((episodes) => {
+      if (this.projectId !== projectId) return;
       this.episodes = episodes;
       if (episodes.length > 0) this.selectEpisode(episodes[0].id);
       else {
@@ -90,7 +95,10 @@ export class AssetsTabComponent {
 
   selectEpisode(episodeId: number): void {
     this.selectedEpisodeId = episodeId;
+    this.editingId = null;
+    this.confirmingDeleteId = null;
     this.api.getBeats(episodeId).subscribe((beats) => {
+      if (this.selectedEpisodeId !== episodeId) return;
       this.beats = beats;
       this.cdr.markForCheck();
     });
@@ -99,6 +107,7 @@ export class AssetsTabComponent {
 
   private loadAssets(episodeId: number): void {
     this.api.getAssets(episodeId).subscribe((assets) => {
+      if (this.selectedEpisodeId !== episodeId) return;
       this.assets = assets;
       this.cdr.markForCheck();
     });
@@ -163,7 +172,8 @@ export class AssetsTabComponent {
   saveEdit(asset: AssetDto): void {
     const attributes: Record<string, string> = {};
     for (const row of this.editAttributes) {
-      if (row.key.trim()) attributes[row.key] = row.value;
+      const key = row.key.trim();
+      if (key) attributes[key] = row.value;
     }
 
     this.api.updateAsset(asset.id, {

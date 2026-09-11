@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { ChangeDetectorRef, Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
@@ -23,6 +23,7 @@ export class ProjectsTabComponent {
 
   constructor(
     private readonly api: ApiClientService,
+    private readonly cdr: ChangeDetectorRef,
     protected readonly projectContext: ProjectContextService,
   ) {}
 
@@ -32,6 +33,7 @@ export class ProjectsTabComponent {
       this.newName = '';
       this.newDescription = '';
       this.projectContext.refresh();
+      this.cdr.markForCheck();
     });
   }
 
@@ -49,6 +51,7 @@ export class ProjectsTabComponent {
     this.api.updateProject(project.id, { name: this.editName, description: this.editDescription || null }).subscribe(() => {
       this.editingId = null;
       this.projectContext.refresh();
+      this.cdr.markForCheck();
     });
   }
 
@@ -60,6 +63,7 @@ export class ProjectsTabComponent {
     this.api.deleteProject(id).subscribe(() => {
       this.confirmingDeleteId = null;
       this.projectContext.refresh();
+      this.cdr.markForCheck();
     });
   }
 

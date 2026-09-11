@@ -33,6 +33,8 @@ export class PhasesTabComponent {
     effect(() => {
       const projectId = this.projectContext.selectedProjectId();
       this.projectId = projectId;
+      this.editingId = null;
+      this.confirmingDeleteId = null;
       if (projectId !== null) this.load(projectId);
       else this.phases = [];
     });
@@ -40,6 +42,7 @@ export class PhasesTabComponent {
 
   private load(projectId: number): void {
     this.api.getPhases(projectId).subscribe((phases) => {
+      if (this.projectContext.selectedProjectId() !== projectId) return;
       this.phases = phases;
       this.cdr.markForCheck();
     });

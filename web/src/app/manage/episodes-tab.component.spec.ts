@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { WritableSignal, signal } from '@angular/core';
 import { of } from 'rxjs';
 import { EpisodesTabComponent } from './episodes-tab.component';
 import { ApiClientService } from '../core/api-client.service';
@@ -10,6 +10,7 @@ describe('EpisodesTabComponent', () => {
   let fixture: ComponentFixture<EpisodesTabComponent>;
   let component: EpisodesTabComponent;
   let apiSpy: jasmine.SpyObj<ApiClientService>;
+  let selectedProjectId: WritableSignal<number | null>;
 
   const episode: EpisodeDto = { id: 10, projectId: 1, name: 'EP1', orderIndex: 1 };
 
@@ -17,7 +18,8 @@ describe('EpisodesTabComponent', () => {
     apiSpy = jasmine.createSpyObj('ApiClientService', ['getEpisodes', 'createEpisode', 'updateEpisode', 'deleteEpisode']);
     apiSpy.getEpisodes.and.returnValue(of([episode]));
 
-    const contextStub = { selectedProjectId: signal<number | null>(1) };
+    selectedProjectId = signal<number | null>(1);
+    const contextStub = { selectedProjectId };
 
     await TestBed.configureTestingModule({
       imports: [EpisodesTabComponent],
@@ -56,5 +58,27 @@ describe('EpisodesTabComponent', () => {
 
     component.confirmDelete(episode.id);
     expect(apiSpy.deleteEpisode).toHaveBeenCalledWith(episode.id);
+  });
+
+  it('starts and saves an edit', () => {
+    apiSpy.updateEpisode.and.returnValue(of({ ...episode, name: 'Renamed' }));
+
+    component.startEdit(episode);
+    component.editName = 'Renamed';
+    component.saveEdit(episode);
+
+    expect(apiSpy.updateEpisode).toHaveBeenCalledWith(episode.id, { name: 'Renamed', orderIndex: episode.orderIndex });
+    expect(component.editingId).toBeNull();
+  });
+
+  it('reloads when the selected project changes', () => {
+    const otherEpisode: EpisodeDto = { id: 20, projectId: 2, name: 'EP2', orderIndex: 1 };
+    apiSpy.getEpisodes.and.returnValue(of([otherEpisode]));
+
+    selectedProjectId.set(2);
+    fixture.detectChanges();
+
+    expect(apiSpy.getEpisodes).toHaveBeenCalledWith(2);
+    expect(component.episodes).toEqual([otherEpisode]);
   });
 });

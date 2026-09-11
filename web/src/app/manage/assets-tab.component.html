@@ -14,7 +14,7 @@
           <span class="font-mono text-sm text-text-secondary">{{ asset.code }}</span>
           <span class="font-medium">{{ asset.title }}</span>
           <span class="rounded-full px-2 py-0.5 text-xs font-medium text-white"
-                [ngClass]="{'bg-status-planned': asset.status === 'Planned'}">{{ asset.status }}</span>
+                [ngClass]="statusPillClass(asset.status)">{{ asset.status }}</span>
           <button type="button" (click)="startEdit(asset)"
                   class="ml-auto rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-hover">Edit</button>
           <button type="button" *ngIf="confirmingDeleteId !== asset.id" (click)="confirmDelete(asset.id)"

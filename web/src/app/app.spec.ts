@@ -37,6 +37,7 @@ describe('App', () => {
     expect(compiled.querySelector('nav')).toBeTruthy();
     expect(compiled.textContent).toContain('Storyboard');
     expect(compiled.textContent).toContain('Production Plan');
+    expect(compiled.textContent).toContain('Manage');
     expect(compiled.textContent).toContain('HalfNut ELS');
   });
 });
