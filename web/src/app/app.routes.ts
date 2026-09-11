@@ -3,7 +3,8 @@ import { BibleComponent } from './bible/bible.component';
 import { ProductionPlanComponent } from './production-plan/production-plan.component';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'bible', pathMatch: 'full' },
-  { path: 'bible', component: BibleComponent },
+  { path: '', redirectTo: 'storyboard', pathMatch: 'full' },
+  { path: 'storyboard', component: BibleComponent },
+  { path: 'bible', redirectTo: 'storyboard', pathMatch: 'full' },
   { path: 'production-plan', component: ProductionPlanComponent },
 ];

@@ -35,7 +35,7 @@ describe('App', () => {
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('nav')).toBeTruthy();
-    expect(compiled.textContent).toContain('Bible');
+    expect(compiled.textContent).toContain('Storyboard');
     expect(compiled.textContent).toContain('Production Plan');
     expect(compiled.textContent).toContain('HalfNut ELS');
   });

@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
 import { ProjectContextService } from '../core/project-context.service';
 import { AssetDto, BeatDto, EpisodeDto, UpdateAssetRequest } from '../core/models';
-import { statusPillClass } from '../core/status-style';
+import { ASSET_STATUSES, statusPillClass } from '../core/status-style';
 import { TimelineViewComponent } from './timeline-view.component';
 
 @Component({
@@ -20,6 +20,7 @@ export class BibleComponent {
   assets: AssetDto[] = [];
   viewMode: 'list' | 'timeline' = 'list';
   protected readonly statusPillClass = statusPillClass;
+  protected readonly assetStatuses = ASSET_STATUSES;
 
   constructor(
     private readonly api: ApiClientService,

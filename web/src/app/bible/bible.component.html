@@ -43,8 +43,10 @@
             <div *ngIf="editingAssetId === asset.id" class="mt-3 space-y-2 border-t border-border pt-3">
               <label class="block text-sm">
                 <span class="mb-1 block text-text-secondary">Status</span>
-                <input type="text" [(ngModel)]="editStatus"
-                       class="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm focus:border-accent focus:outline-none" />
+                <select [(ngModel)]="editStatus"
+                        class="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm focus:border-accent focus:outline-none">
+                  <option *ngFor="let s of assetStatuses" [value]="s">{{ s }}</option>
+                </select>
               </label>
               <label class="block text-sm">
                 <span class="mb-1 block text-text-secondary">Notes</span>
@@ -82,8 +84,10 @@
           <div *ngIf="editingAssetId === asset.id" class="mt-3 space-y-2 border-t border-border pt-3">
             <label class="block text-sm">
               <span class="mb-1 block text-text-secondary">Status</span>
-              <input type="text" [(ngModel)]="editStatus"
-                     class="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm focus:border-accent focus:outline-none" />
+              <select [(ngModel)]="editStatus"
+                      class="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm focus:border-accent focus:outline-none">
+                <option *ngFor="let s of assetStatuses" [value]="s">{{ s }}</option>
+              </select>
             </label>
             <label class="block text-sm">
               <span class="mb-1 block text-text-secondary">Notes</span>
