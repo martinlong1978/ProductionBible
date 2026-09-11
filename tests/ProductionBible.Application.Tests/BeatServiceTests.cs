@@ -140,15 +140,18 @@ public class BeatServiceTests
         var assetC = new Asset { EpisodeId = episodeId, AssetType = assetType, Code = "A-03", Title = "Unknown position" };
         context.Assets.AddRange(assetA, assetB, assetC);
         await context.SaveChangesAsync();
-        // Added out of order, with C having no known position (null).
-        context.AssetBeats.Add(new AssetBeat { AssetId = assetC.Id, BeatId = beat.Id, OrderInBeat = null });
-        context.AssetBeats.Add(new AssetBeat { AssetId = assetB.Id, BeatId = beat.Id, OrderInBeat = 1 });
-        context.AssetBeats.Add(new AssetBeat { AssetId = assetA.Id, BeatId = beat.Id, OrderInBeat = 0 });
+        // Added out of order, with B having no known position (null). The expected final
+        // order (C, A, B) deliberately differs from ascending AssetId order (A, B, C),
+        // descending AssetId order (C, B, A), and this .Add() call order (C, B, A) too --
+        // so the test can only pass if the code genuinely sorts by OrderInBeat.
+        context.AssetBeats.Add(new AssetBeat { AssetId = assetC.Id, BeatId = beat.Id, OrderInBeat = 0 });
+        context.AssetBeats.Add(new AssetBeat { AssetId = assetB.Id, BeatId = beat.Id, OrderInBeat = null });
+        context.AssetBeats.Add(new AssetBeat { AssetId = assetA.Id, BeatId = beat.Id, OrderInBeat = 1 });
         await context.SaveChangesAsync();
 
         var service = new BeatService(context);
         var beats = await service.GetByEpisodeAsync(episodeId);
 
-        Assert.Equal(new[] { assetA.Id, assetB.Id, assetC.Id }, beats[0].AssetIds);
+        Assert.Equal(new[] { assetC.Id, assetA.Id, assetB.Id }, beats[0].AssetIds);
     }
 }
