@@ -13,6 +13,11 @@
   --color-status-progress: #f59e0b;
   --color-status-planned: #64748b;
   --color-status-error: #f43f5e;
+  --color-track-dialogue: #3fb950;
+  --color-track-broll: #4c8dff;
+  --color-track-screen: #a371f7;
+  --color-track-graphic: #d29922;
+  --color-track-vo: #39c5cf;
   --font-sans: 'Inter', -apple-system, 'Segoe UI', sans-serif;
 }
 
