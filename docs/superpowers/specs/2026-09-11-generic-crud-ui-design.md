@@ -186,7 +186,7 @@ Three patterns get built once and reused across all five tabs:
 | Episode | Name, OrderIndex | Project (fixed = current selection) |
 | Phase   | Name, OrderIndex | Project (fixed = current selection) |
 | Beat    | Timecode, Purpose, Ordinal, DurationSeconds | Episode (fixed = picker selection) |
-| Asset   | AssetType (dropdown), Code, Title, ScriptText, Status (dropdown, reuse `ASSET_STATUSES`), Notes, SequenceNumber, TargetLengthSeconds, Phase (dropdown, scoped to project), Attributes (key/value pairs, add/remove rows), Beat links (multi-select from the episode's beats) | Episode (fixed = picker selection) |
+| Asset   | **Edit form:** AssetType (dropdown), Code, Title, ScriptText, Status (dropdown, reuse `ASSET_STATUSES`), Notes, SequenceNumber, TargetLengthSeconds, Phase (dropdown, scoped to project), Attributes (key/value pairs, add/remove rows), Beat links (multi-select from the episode's beats). **Create form:** Code, Title, AssetType only — `Status` defaults to `"Planned"`, everything else nulls; the full field set is reachable via a follow-up Edit. This matches the app's existing pattern of a lightweight create plus a richer edit (see Beat/Episode/Phase, which also create with fewer fields than they can later edit). | Episode (fixed = picker selection) |
 
 Asset's Beat-links multi-select **is** the "AssetBeat link management UI"
 Track B item #3 calls for — no separate screen. `UpdateAssetRequest.BeatIds`
