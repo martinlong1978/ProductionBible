@@ -179,4 +179,29 @@ public class ImportMapperTests
         Assert.Equal("22:20", lastBeat.SourceTimecode);
         Assert.Equal(60, lastBeat.DurationSeconds);
     }
+
+    [Fact]
+    public async Task Shot_pages_get_a_real_Phase_row_instead_of_a_PhaseGroup_attribute()
+    {
+        await using var context = CreateInMemoryContext();
+        var mapper = new ImportMapper(context);
+
+        await mapper.ImportAsync(LoadFixture("storyboard.html"), LoadFixture("production_plan.md"), "HalfNut ELS");
+
+        var a01 = await context.Assets
+            .Include(a => a.Attributes)
+            .Include(a => a.Phase)
+            .SingleAsync(a => a.Code == "A-01");
+
+        Assert.NotNull(a01.Phase);
+        Assert.DoesNotContain(a01.Attributes, attr => attr.Key == "PhaseGroup");
+
+        // Two production_plan.md pages that share a phase (both "Setup A" shots, per the
+        // fixture) resolve to the SAME Phase row, not two separate rows with the same name.
+        var a02 = await context.Assets.Include(a => a.Phase).SingleAsync(a => a.Code == "A-02");
+        Assert.Equal(a01.PhaseId, a02.PhaseId);
+
+        var phaseCount = await context.Phases.CountAsync();
+        Assert.True(phaseCount > 0);
+    }
 }
