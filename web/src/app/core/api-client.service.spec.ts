@@ -165,4 +165,20 @@ describe('ApiClientService', () => {
     expect(req.request.method).toBe('DELETE');
     req.flush(null);
   });
+
+  it('sends a PATCH to /api/episodes/{episodeId}/beats/reorder for reorderBeats', () => {
+    service.reorderBeats(10, [102, 100, 101]).subscribe();
+    const req = httpMock.expectOne('/api/episodes/10/beats/reorder');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ orderedIds: [102, 100, 101] });
+    req.flush(null);
+  });
+
+  it('sends a PATCH to /api/beats/{beatId}/asset-beats/reorder for reorderAssetsWithinBeat', () => {
+    service.reorderAssetsWithinBeat(100, [1002, 1000, 1001]).subscribe();
+    const req = httpMock.expectOne('/api/beats/100/asset-beats/reorder');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ orderedIds: [1002, 1000, 1001] });
+    req.flush(null);
+  });
 });

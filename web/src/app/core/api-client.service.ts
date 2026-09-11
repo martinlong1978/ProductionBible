@@ -94,4 +94,12 @@ export class ApiClientService {
   deleteAsset(id: number): Observable<void> {
     return this.http.delete<void>(`/api/assets/${id}`);
   }
+
+  reorderBeats(episodeId: number, orderedIds: number[]): Observable<void> {
+    return this.http.patch<void>(`/api/episodes/${episodeId}/beats/reorder`, { orderedIds });
+  }
+
+  reorderAssetsWithinBeat(beatId: number, orderedIds: number[]): Observable<void> {
+    return this.http.patch<void>(`/api/beats/${beatId}/asset-beats/reorder`, { orderedIds });
+  }
 }
