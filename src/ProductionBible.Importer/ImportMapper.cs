@@ -140,7 +140,7 @@ public class ImportMapper
                         continue;
                     }
 
-                    var existingLink = beat.AssetBeats.FirstOrDefault(ab => ab.AssetId == shotAsset.Id);
+                    var existingLink = beat.AssetBeats.FirstOrDefault(ab => ab.Asset == shotAsset);
                     if (existingLink is null)
                     {
                         Console.WriteLine(
@@ -162,7 +162,7 @@ public class ImportMapper
                         continue;
                     }
 
-                    var existingLink = beat.AssetBeats.FirstOrDefault(ab => ab.AssetId == animationAsset.Id);
+                    var existingLink = beat.AssetBeats.FirstOrDefault(ab => ab.Asset == animationAsset);
                     if (existingLink is not null)
                     {
                         existingLink.OrderInBeat = i;
