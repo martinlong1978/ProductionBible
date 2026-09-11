@@ -1,7 +1,50 @@
 <div class="space-y-6">
-  <section class="rounded-lg border border-border bg-surface" *ngFor="let group of groups">
+  <div cdkDropList [cdkDropListData]="phaseGroups" (cdkDropListDropped)="onPhaseDrop($event)" class="space-y-6">
+    <section class="rounded-lg border border-border bg-surface" *ngFor="let group of phaseGroups" cdkDrag>
+      <h3 class="sticky top-0 flex items-center gap-2 rounded-t-lg border-b border-border bg-surface px-4 py-3 text-sm font-semibold text-text-secondary">
+        <span cdkDragHandle class="cursor-grab select-none" title="Drag to reorder phase">&#8942;&#8942;</span>
+        {{ group.phase }}
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead>
+            <tr class="border-b border-border text-xs uppercase tracking-wide text-text-secondary">
+              <th class="w-8 px-2 py-2"></th>
+              <th class="px-4 py-2">Seq</th>
+              <th class="px-4 py-2">Code</th>
+              <th class="px-4 py-2">Title</th>
+              <th class="px-4 py-2">Location</th>
+              <th class="px-4 py-2">Angle &amp; camera</th>
+              <th class="px-4 py-2">Audio</th>
+              <th class="px-4 py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody [cdkDropListData]="group.assets" cdkDropList (cdkDropListDropped)="onShotDrop(group, $event)">
+            <tr *ngFor="let asset of group.assets" class="border-b border-border last:border-0 hover:bg-surface-hover" cdkDrag>
+              <td class="px-2 py-2">
+                <span cdkDragHandle class="cursor-grab select-none text-text-secondary" title="Drag to reorder shot">&#8942;&#8942;</span>
+              </td>
+              <td class="px-4 py-2 text-text-secondary">{{ asset.sequenceNumber }}</td>
+              <td class="px-4 py-2 font-mono">{{ asset.code }}</td>
+              <td class="px-4 py-2 font-medium">{{ asset.title }}</td>
+              <td class="px-4 py-2 text-text-secondary">{{ asset.attributes['Location'] }}</td>
+              <td class="px-4 py-2 text-text-secondary">{{ asset.attributes['AngleAndCamera'] }}</td>
+              <td class="px-4 py-2 text-text-secondary">{{ asset.attributes['AudioNotes'] }}</td>
+              <td class="px-4 py-2">
+                <span class="rounded-full px-2 py-0.5 text-xs font-medium text-white" [ngClass]="statusPillClass(asset.status)">
+                  {{ asset.status }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <section class="rounded-lg border border-border bg-surface" *ngIf="unphasedGroup">
     <h3 class="sticky top-0 rounded-t-lg border-b border-border bg-surface px-4 py-3 text-sm font-semibold text-text-secondary">
-      {{ group.phase }}
+      {{ unphasedGroup.phase }}
     </h3>
     <div class="overflow-x-auto">
       <table class="w-full text-left text-sm">
@@ -17,7 +60,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let asset of group.assets" class="border-b border-border last:border-0 hover:bg-surface-hover">
+          <tr *ngFor="let asset of unphasedGroup.assets" class="border-b border-border last:border-0 hover:bg-surface-hover">
             <td class="px-4 py-2 text-text-secondary">{{ asset.sequenceNumber }}</td>
             <td class="px-4 py-2 font-mono">{{ asset.code }}</td>
             <td class="px-4 py-2 font-medium">{{ asset.title }}</td>
