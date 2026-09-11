@@ -53,8 +53,16 @@ describe('BibleComponent', () => {
     expect(component.beats).toEqual([beat]);
   });
 
-  it('groups assets under the beat that links to them', () => {
+  it('groups assets under the beat that links to them, in the beat\'s own asset order', () => {
+    const secondBeat: BeatDto = { id: 101, episodeId: 10, timecode: '00:38', purpose: 'Next', assetIds: [1001, 1000] };
+    component.beats = [beat, secondBeat];
+    component.assets = [linkedAsset, unlinkedAsset];
+
+    // beat.assetIds is [1000] (unchanged from the top-level fixture); secondBeat's is
+    // deliberately reversed ([1001, 1000]) relative to `this.assets`' own order, to prove
+    // assetsForBeat follows beat.assetIds' order rather than this.assets' fetch order.
     expect(component.assetsForBeat(beat)).toEqual([linkedAsset]);
+    expect(component.assetsForBeat(secondBeat).map((a) => a.id)).toEqual([1001, 1000]);
   });
 
   it('lists assets with no beat link as unassigned', () => {
