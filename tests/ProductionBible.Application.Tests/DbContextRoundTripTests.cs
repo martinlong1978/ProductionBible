@@ -26,7 +26,7 @@ public class DbContextRoundTripTests : IDisposable
             var assetType = new AssetType { Name = "Shot" };
             var project = new Project { Name = "HalfNut ELS" };
             var episode = new Episode { Project = project, Name = "EP1", OrderIndex = 1 };
-            var beat = new Beat { Episode = episode, Timecode = "00:00", Purpose = "Cold open" };
+            var beat = new Beat { Episode = episode, SourceTimecode = "00:00", Purpose = "Cold open" };
             var asset = new Asset
             {
                 Episode = episode,

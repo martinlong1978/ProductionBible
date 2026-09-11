@@ -45,7 +45,7 @@ public class ImportMapperTests
         var f01 = await context.Assets
             .Include(a => a.AssetBeats).ThenInclude(ab => ab.Beat)
             .SingleAsync(a => a.Code == "F-01");
-        var timecodes = f01.AssetBeats.Select(ab => ab.Beat!.Timecode).OrderBy(t => t).ToList();
+        var timecodes = f01.AssetBeats.Select(ab => ab.Beat!.SourceTimecode).OrderBy(t => t).ToList();
         Assert.Equal(new List<string> { "00:00", "22:30" }, timecodes);
     }
 
@@ -79,7 +79,7 @@ public class ImportMapperTests
         Assert.Null(g1.SequenceNumber);
 
         // Coverage Check table, EP1: "02:00 B-05 + G1" and "07:20 G1" — g1_gears covers both.
-        var timecodes = g1.AssetBeats.Select(ab => ab.Beat!.Timecode).OrderBy(t => t).ToList();
+        var timecodes = g1.AssetBeats.Select(ab => ab.Beat!.SourceTimecode).OrderBy(t => t).ToList();
         Assert.Equal(new List<string> { "02:00", "07:20" }, timecodes);
     }
 
@@ -95,7 +95,7 @@ public class ImportMapperTests
         var beat = await context.Beats
             .Include(b => b.AssetBeats).ThenInclude(ab => ab.Asset)
             .Include(b => b.Episode)
-            .SingleAsync(b => b.Episode!.Name == "EP1" && b.Timecode == "16:30");
+            .SingleAsync(b => b.Episode!.Name == "EP1" && b.SourceTimecode == "16:30");
 
         var orderedCodes = beat.AssetBeats
             .Where(ab => ab.OrderInBeat != null)

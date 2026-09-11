@@ -21,7 +21,7 @@ public class AssetServiceTests
         var project = new Project { Name = "HalfNut ELS" };
         var episode = new Episode { Project = project, Name = "EP1", OrderIndex = 1 };
         var assetType = new AssetType { Name = "Shot" };
-        var beat = new Beat { Episode = episode, Timecode = "00:00", Purpose = "Cold open" };
+        var beat = new Beat { Episode = episode, SourceTimecode = "00:00", Purpose = "Cold open" };
         context.Episodes.Add(episode);
         context.AssetTypes.Add(assetType);
         context.Beats.Add(beat);
@@ -149,7 +149,7 @@ public class AssetServiceTests
         await using var context = CreateInMemoryContext();
         var (episodeId, assetTypeId, beatId) = await SeedAsync(context);
         var episode = (await context.Episodes.FindAsync(episodeId))!;
-        var newBeat = new Beat { Episode = episode, Timecode = "01:00", Purpose = "New beat" };
+        var newBeat = new Beat { Episode = episode, SourceTimecode = "01:00", Purpose = "New beat" };
         context.Beats.Add(newBeat);
         await context.SaveChangesAsync();
 

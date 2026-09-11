@@ -212,7 +212,7 @@ public class ImportMapper
         var key = (episodeNumber, timecode);
         if (_beatsByKey.TryGetValue(key, out var existing)) return existing;
         var episode = GetOrCreateEpisode(project, episodeNumber);
-        var beat = new Beat { Episode = episode, Timecode = timecode, Purpose = purpose };
+        var beat = new Beat { Episode = episode, SourceTimecode = timecode, Purpose = purpose };
         _beatsByKey[key] = beat;
         _db.Beats.Add(beat);
         return beat;
