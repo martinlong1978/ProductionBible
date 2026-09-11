@@ -22,7 +22,7 @@ describe('AssetsTabComponent', () => {
     id: 1000, episodeId: 10, assetTypeId: 1, assetTypeName: 'Shot', code: 'A-01',
     title: 'Tool entering the work', scriptText: null, status: 'Planned', notes: null,
     sequenceNumber: 1, targetLengthSeconds: null, phaseId: 5, completedAtUtc: null,
-    attributes: { Location: 'Workshop' }, beatIds: [100],
+    attributes: { Location: 'Workshop' }, beatIds: [100], orderInPhase: null,
   };
 
   beforeEach(async () => {

@@ -102,4 +102,12 @@ export class ApiClientService {
   reorderAssetsWithinBeat(beatId: number, orderedIds: number[]): Observable<void> {
     return this.http.patch<void>(`/api/beats/${beatId}/asset-beats/reorder`, { orderedIds });
   }
+
+  reorderPhases(projectId: number, orderedIds: number[]): Observable<void> {
+    return this.http.patch<void>(`/api/projects/${projectId}/phases/reorder`, { orderedIds });
+  }
+
+  reorderAssetsWithinPhase(phaseId: number, orderedIds: number[]): Observable<void> {
+    return this.http.patch<void>(`/api/phases/${phaseId}/assets/reorder`, { orderedIds });
+  }
 }

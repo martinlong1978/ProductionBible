@@ -181,4 +181,20 @@ describe('ApiClientService', () => {
     expect(req.request.body).toEqual({ orderedIds: [1002, 1000, 1001] });
     req.flush(null);
   });
+
+  it('sends a PATCH to /api/projects/{projectId}/phases/reorder for reorderPhases', () => {
+    service.reorderPhases(1, [5, 3, 4]).subscribe();
+    const req = httpMock.expectOne('/api/projects/1/phases/reorder');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ orderedIds: [5, 3, 4] });
+    req.flush(null);
+  });
+
+  it('sends a PATCH to /api/phases/{phaseId}/assets/reorder for reorderAssetsWithinPhase', () => {
+    service.reorderAssetsWithinPhase(5, [1002, 1000, 1001]).subscribe();
+    const req = httpMock.expectOne('/api/phases/5/assets/reorder');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ orderedIds: [1002, 1000, 1001] });
+    req.flush(null);
+  });
 });

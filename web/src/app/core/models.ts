@@ -58,6 +58,7 @@ export interface AssetDto {
   completedAtUtc: string | null;
   attributes: Record<string, string>;
   beatIds: number[];
+  orderInPhase: number | null;
 }
 
 export interface UpdateAssetRequest {
