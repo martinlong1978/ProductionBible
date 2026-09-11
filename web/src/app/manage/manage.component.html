@@ -22,7 +22,7 @@
             [class.text-text-secondary]="activeTab !== 'assets'">Assets</button>
   </div>
 
-  <section *ngIf="activeTab === 'projects'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Projects tab coming in Task 4.</section>
+  <app-projects-tab *ngIf="activeTab === 'projects'"></app-projects-tab>
   <section *ngIf="activeTab === 'episodes'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Episodes tab coming in Task 5.</section>
   <section *ngIf="activeTab === 'phases'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Phases tab coming in Task 6.</section>
   <section *ngIf="activeTab === 'beats'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Beats tab coming in Task 7.</section>
