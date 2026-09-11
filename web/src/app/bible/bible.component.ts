@@ -1,4 +1,5 @@
 import { ChangeDetectorRef, Component, effect } from '@angular/core';
+import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
@@ -10,7 +11,7 @@ import { TimelineViewComponent } from './timeline-view.component';
 @Component({
   selector: 'app-bible',
   standalone: true,
-  imports: [CommonModule, FormsModule, TimelineViewComponent],
+  imports: [CommonModule, FormsModule, DragDropModule, TimelineViewComponent],
   templateUrl: './bible.component.html',
 })
 export class BibleComponent {
@@ -58,6 +59,24 @@ export class BibleComponent {
     return beat.assetIds
       .map((id) => byId.get(id))
       .filter((asset): asset is AssetDto => asset !== undefined);
+  }
+
+  onBeatDrop(event: CdkDragDrop<BeatDto[]>): void {
+    moveItemInArray(this.beats, event.previousIndex, event.currentIndex);
+    const orderedIds = this.beats.map((b) => b.id);
+    this.cdr.markForCheck();
+    this.api.reorderBeats(this.selectedEpisodeId!, orderedIds).subscribe(() => {
+      this.selectEpisode(this.selectedEpisodeId!);
+    });
+  }
+
+  onAssetDrop(beat: BeatDto, event: CdkDragDrop<AssetDto[]>): void {
+    moveItemInArray(beat.assetIds, event.previousIndex, event.currentIndex);
+    const orderedIds = [...beat.assetIds];
+    this.cdr.markForCheck();
+    this.api.reorderAssetsWithinBeat(beat.id, orderedIds).subscribe(() => {
+      this.selectEpisode(this.selectedEpisodeId!);
+    });
   }
 
   get unassignedAssets(): AssetDto[] {

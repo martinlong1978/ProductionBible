@@ -22,7 +22,9 @@ describe('BibleComponent', () => {
   const unlinkedAsset: AssetDto = { ...linkedAsset, id: 1001, code: 'A-02', beatIds: [] };
 
   beforeEach(async () => {
-    apiSpy = jasmine.createSpyObj('ApiClientService', ['getEpisodes', 'getBeats', 'getAssets', 'updateAsset']);
+    apiSpy = jasmine.createSpyObj('ApiClientService', [
+      'getEpisodes', 'getBeats', 'getAssets', 'updateAsset', 'reorderBeats', 'reorderAssetsWithinBeat',
+    ]);
     apiSpy.getEpisodes.and.returnValue(of([episode]));
     apiSpy.getBeats.and.returnValue(of([beat]));
     apiSpy.getAssets.and.returnValue(of([linkedAsset, unlinkedAsset]));
@@ -95,5 +97,42 @@ describe('BibleComponent', () => {
     }));
     expect(component.assets.find((a) => a.id === linkedAsset.id)?.status).toBe('Shot');
     expect(component.editingAssetId).toBeNull();
+  });
+
+  it('reorders beats in place and calls reorderBeats with the new order', () => {
+    const secondBeat: BeatDto = { id: 101, episodeId: 10, timecode: '00:38', purpose: 'Next', ordinal: 1, durationSeconds: 30, startSeconds: 38, endSeconds: 68, assetIds: [] };
+    component.beats = [beat, secondBeat];
+    apiSpy.reorderBeats.and.returnValue(of(undefined));
+    // Model a real backend: after the reorder is persisted, the reload triggered by
+    // onBeatDrop's success callback fetches beats back in the new order.
+    apiSpy.getBeats.and.returnValue(of([secondBeat, beat]));
+
+    component.onBeatDrop({ previousIndex: 0, currentIndex: 1 } as any);
+
+    expect(component.beats.map((b) => b.id)).toEqual([101, 100]);
+    expect(apiSpy.reorderBeats).toHaveBeenCalledWith(10, [101, 100]);
+  });
+
+  it('reorders a beat\'s asset links in place and calls reorderAssetsWithinBeat with the new order', () => {
+    const multiBeat: BeatDto = { id: 102, episodeId: 10, timecode: '01:00', purpose: 'Setup', ordinal: 2, durationSeconds: 20, startSeconds: 68, endSeconds: 88, assetIds: [1000, 1001] };
+    component.assets = [linkedAsset, unlinkedAsset];
+    apiSpy.reorderAssetsWithinBeat.and.returnValue(of(undefined));
+
+    component.onAssetDrop(multiBeat, { previousIndex: 0, currentIndex: 1 } as any);
+
+    expect(multiBeat.assetIds).toEqual([1001, 1000]);
+    expect(apiSpy.reorderAssetsWithinBeat).toHaveBeenCalledWith(102, [1001, 1000]);
+  });
+
+  it('reloads the episode after a successful beat reorder', () => {
+    component.beats = [beat];
+    apiSpy.reorderBeats.and.returnValue(of(undefined));
+    apiSpy.getBeats.calls.reset();
+    apiSpy.getAssets.calls.reset();
+
+    component.onBeatDrop({ previousIndex: 0, currentIndex: 0 } as any);
+
+    expect(apiSpy.getBeats).toHaveBeenCalledWith(10);
+    expect(apiSpy.getAssets).toHaveBeenCalledWith(10);
   });
 });
