@@ -12,6 +12,7 @@ public class ProductionBibleDbContext : DbContext
 
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Episode> Episodes => Set<Episode>();
+    public DbSet<Phase> Phases => Set<Phase>();
     public DbSet<Beat> Beats => Set<Beat>();
     public DbSet<AssetType> AssetTypes => Set<AssetType>();
     public DbSet<Asset> Assets => Set<Asset>();
@@ -40,5 +41,9 @@ public class ProductionBibleDbContext : DbContext
             .HasOne(a => a.AssetType).WithMany().HasForeignKey(a => a.AssetTypeId);
         modelBuilder.Entity<AssetAttribute>()
             .HasOne(at => at.Asset).WithMany(a => a.Attributes).HasForeignKey(at => at.AssetId);
+        modelBuilder.Entity<Phase>()
+            .HasOne(ph => ph.Project).WithMany().HasForeignKey(ph => ph.ProjectId);
+        modelBuilder.Entity<Asset>()
+            .HasOne(a => a.Phase).WithMany(ph => ph.Assets).HasForeignKey(a => a.PhaseId);
     }
 }
