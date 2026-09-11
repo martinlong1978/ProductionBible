@@ -12,7 +12,7 @@ public class ImportMapper
     private readonly Dictionary<string, AssetType> _assetTypesByName = new();
     private readonly Dictionary<(int episodeNumber, string timecode), Beat> _beatsByKey = new();
     private readonly Dictionary<(int episodeNumber, string code), Asset> _assetsByEpisodeAndCode = new();
-    private readonly Dictionary<(int projectId, string name), Phase> _phasesByKey = new();
+    private readonly Dictionary<string, Phase> _phasesByKey = new();
 
     public ImportMapper(ProductionBibleDbContext db)
     {
@@ -207,10 +207,9 @@ public class ImportMapper
 
     private Phase GetOrCreatePhase(Project project, string name)
     {
-        var key = (project.Id, name);
-        if (_phasesByKey.TryGetValue(key, out var existing)) return existing;
+        if (_phasesByKey.TryGetValue(name, out var existing)) return existing;
         var phase = new Phase { Project = project, Name = name, OrderIndex = _phasesByKey.Count };
-        _phasesByKey[key] = phase;
+        _phasesByKey[name] = phase;
         _db.Phases.Add(phase);
         return phase;
     }
