@@ -55,4 +55,114 @@ describe('ApiClientService', () => {
     expect(req.request.method).toBe('PUT');
     req.flush({});
   });
+
+  it('sends a POST to /api/projects for createProject', () => {
+    service.createProject({ name: 'New Project', description: null }).subscribe();
+    const req = httpMock.expectOne('/api/projects');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ name: 'New Project', description: null });
+    req.flush({});
+  });
+
+  it('sends a PUT to /api/projects/{id} for updateProject', () => {
+    service.updateProject(1, { name: 'Renamed', description: 'd' }).subscribe();
+    const req = httpMock.expectOne('/api/projects/1');
+    expect(req.request.method).toBe('PUT');
+    req.flush({});
+  });
+
+  it('sends a DELETE to /api/projects/{id} for deleteProject', () => {
+    service.deleteProject(1).subscribe();
+    const req = httpMock.expectOne('/api/projects/1');
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null);
+  });
+
+  it('sends a POST to /api/projects/{projectId}/episodes for createEpisode', () => {
+    service.createEpisode(1, { name: 'EP6', orderIndex: 6 }).subscribe();
+    const req = httpMock.expectOne('/api/projects/1/episodes');
+    expect(req.request.method).toBe('POST');
+    req.flush({});
+  });
+
+  it('sends a PUT to /api/episodes/{id} for updateEpisode', () => {
+    service.updateEpisode(10, { name: 'EP1', orderIndex: 1 }).subscribe();
+    const req = httpMock.expectOne('/api/episodes/10');
+    expect(req.request.method).toBe('PUT');
+    req.flush({});
+  });
+
+  it('sends a DELETE to /api/episodes/{id} for deleteEpisode', () => {
+    service.deleteEpisode(10).subscribe();
+    const req = httpMock.expectOne('/api/episodes/10');
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null);
+  });
+
+  it('fetches phases for a project from /api/projects/{id}/phases', () => {
+    service.getPhases(1).subscribe();
+    const req = httpMock.expectOne('/api/projects/1/phases');
+    expect(req.request.method).toBe('GET');
+    req.flush([]);
+  });
+
+  it('sends a POST to /api/projects/{projectId}/phases for createPhase', () => {
+    service.createPhase(1, { name: 'Setup A', orderIndex: 0 }).subscribe();
+    const req = httpMock.expectOne('/api/projects/1/phases');
+    expect(req.request.method).toBe('POST');
+    req.flush({});
+  });
+
+  it('sends a PUT to /api/phases/{id} for updatePhase', () => {
+    service.updatePhase(5, { name: 'Setup A', orderIndex: 0 }).subscribe();
+    const req = httpMock.expectOne('/api/phases/5');
+    expect(req.request.method).toBe('PUT');
+    req.flush({});
+  });
+
+  it('sends a DELETE to /api/phases/{id} for deletePhase', () => {
+    service.deletePhase(5).subscribe();
+    const req = httpMock.expectOne('/api/phases/5');
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null);
+  });
+
+  it('sends a POST to /api/episodes/{episodeId}/beats for createBeat', () => {
+    service.createBeat(10, { timecode: '00:00', purpose: 'Cold open', ordinal: 0, durationSeconds: 38 }).subscribe();
+    const req = httpMock.expectOne('/api/episodes/10/beats');
+    expect(req.request.method).toBe('POST');
+    req.flush({});
+  });
+
+  it('sends a PUT to /api/beats/{id} for updateBeat', () => {
+    service.updateBeat(100, { timecode: '00:00', purpose: 'Cold open', ordinal: 0, durationSeconds: 38 }).subscribe();
+    const req = httpMock.expectOne('/api/beats/100');
+    expect(req.request.method).toBe('PUT');
+    req.flush({});
+  });
+
+  it('sends a DELETE to /api/beats/{id} for deleteBeat', () => {
+    service.deleteBeat(100).subscribe();
+    const req = httpMock.expectOne('/api/beats/100');
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null);
+  });
+
+  it('sends a POST to /api/episodes/{episodeId}/assets for createAsset', () => {
+    service.createAsset(10, {
+      assetTypeId: 1, code: 'A-03', title: 'New shot', scriptText: null,
+      status: 'Planned', notes: null, sequenceNumber: null, targetLengthSeconds: null,
+      phaseId: null, attributes: null, beatIds: null,
+    }).subscribe();
+    const req = httpMock.expectOne('/api/episodes/10/assets');
+    expect(req.request.method).toBe('POST');
+    req.flush({});
+  });
+
+  it('sends a DELETE to /api/assets/{id} for deleteAsset', () => {
+    service.deleteAsset(1000).subscribe();
+    const req = httpMock.expectOne('/api/assets/1000');
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null);
+  });
 });

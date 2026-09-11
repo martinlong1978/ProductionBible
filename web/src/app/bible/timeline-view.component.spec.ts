@@ -15,8 +15,8 @@ describe('TimelineViewComponent', () => {
   }
 
   const beats: BeatDto[] = [
-    { id: 1, episodeId: 1, timecode: '00:00', purpose: 'Cold open', assetIds: [1, 2] },
-    { id: 2, episodeId: 1, timecode: '02:00', purpose: 'Graphic', assetIds: [3] },
+    { id: 1, episodeId: 1, timecode: '00:00', purpose: 'Cold open', ordinal: 0, durationSeconds: 120, startSeconds: 0, endSeconds: 120, assetIds: [1, 2] },
+    { id: 2, episodeId: 1, timecode: '02:00', purpose: 'Graphic', ordinal: 1, durationSeconds: 60, startSeconds: 120, endSeconds: 180, assetIds: [3] },
   ];
   const assets: AssetDto[] = [
     asset(1, 'PieceToCamera', 'E-S'),
@@ -45,7 +45,7 @@ describe('TimelineViewComponent', () => {
   });
 
   it('re-derives the timeline when inputs change via ngOnChanges', () => {
-    component.beats = [{ id: 3, episodeId: 1, timecode: '10:00', purpose: 'Later', assetIds: [] }];
+    component.beats = [{ id: 3, episodeId: 1, timecode: '10:00', purpose: 'Later', ordinal: 0, durationSeconds: 60, startSeconds: 0, endSeconds: 60, assetIds: [] }];
     component.assets = [];
     component.ngOnChanges();
 

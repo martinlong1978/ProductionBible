@@ -13,7 +13,7 @@ describe('BibleComponent', () => {
 
   const project: ProjectDto = { id: 1, name: 'HalfNut ELS', description: null };
   const episode: EpisodeDto = { id: 10, projectId: 1, name: 'EP1', orderIndex: 1 };
-  const beat: BeatDto = { id: 100, episodeId: 10, timecode: '00:00', purpose: 'Cold open', assetIds: [1000] };
+  const beat: BeatDto = { id: 100, episodeId: 10, timecode: '00:00', purpose: 'Cold open', ordinal: 0, durationSeconds: 38, startSeconds: 0, endSeconds: 38, assetIds: [1000] };
   const linkedAsset: AssetDto = {
     id: 1000, episodeId: 10, assetTypeId: 1, assetTypeName: 'Shot', code: 'A-01',
     title: 'Tool entering the work', scriptText: null, status: 'Planned', notes: null,
@@ -54,7 +54,7 @@ describe('BibleComponent', () => {
   });
 
   it('groups assets under the beat that links to them, in the beat\'s own asset order', () => {
-    const secondBeat: BeatDto = { id: 101, episodeId: 10, timecode: '00:38', purpose: 'Next', assetIds: [1001, 1000] };
+    const secondBeat: BeatDto = { id: 101, episodeId: 10, timecode: '00:38', purpose: 'Next', ordinal: 1, durationSeconds: 30, startSeconds: 38, endSeconds: 68, assetIds: [1001, 1000] };
     component.beats = [beat, secondBeat];
     component.assets = [linkedAsset, unlinkedAsset];
 

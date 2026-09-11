@@ -29,7 +29,7 @@ describe('buildTimeline', () => {
   }
 
   function beat(id: number, timecode: string, assetIds: number[]): BeatDto {
-    return { id, episodeId: 1, timecode, purpose: 'Beat', assetIds };
+    return { id, episodeId: 1, timecode, purpose: 'Beat', ordinal: 0, durationSeconds: 0, startSeconds: 0, endSeconds: 0, assetIds };
   }
 
   it('builds one row per beat in ascending timecode order', () => {
