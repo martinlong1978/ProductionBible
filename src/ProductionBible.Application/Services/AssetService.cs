@@ -79,9 +79,10 @@ public class AssetService : IAssetService
         asset.Attributes.Clear();
         ApplyAttributes(asset, request.Attributes);
 
+        var existingOrder = asset.AssetBeats.ToDictionary(ab => ab.BeatId, ab => ab.OrderInBeat);
         _db.AssetBeats.RemoveRange(asset.AssetBeats);
         asset.AssetBeats.Clear();
-        ApplyBeatLinks(asset, request.BeatIds);
+        ApplyBeatLinks(asset, request.BeatIds, existingOrder);
 
         await _db.SaveChangesAsync();
         return await GetByIdAsync(id);
@@ -111,12 +112,15 @@ public class AssetService : IAssetService
         }
     }
 
-    private static void ApplyBeatLinks(Asset asset, int[]? beatIds)
+    private static void ApplyBeatLinks(Asset asset, int[]? beatIds, IReadOnlyDictionary<int, int?>? existingOrder = null)
     {
         if (beatIds is null) return;
         foreach (var beatId in beatIds)
         {
-            asset.AssetBeats.Add(new AssetBeat { Asset = asset, BeatId = beatId });
+            var orderInBeat = existingOrder is not null && existingOrder.TryGetValue(beatId, out var existing)
+                ? existing
+                : null;
+            asset.AssetBeats.Add(new AssetBeat { Asset = asset, BeatId = beatId, OrderInBeat = orderInBeat });
         }
     }
 

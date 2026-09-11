@@ -116,6 +116,70 @@ public class AssetServiceTests
         Assert.Empty(context.AssetAttributes.Where(a => a.AssetId == created.Id));
     }
 
+    [Fact]
+    public async Task UpdateAsync_preserves_existing_OrderInBeat_for_beats_that_remain_linked()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, beatId) = await SeedAsync(context);
+        var service = new AssetService(context);
+        var created = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-01", "Original title", null, "Planned", null, 1, null,
+            null,
+            new[] { beatId }));
+
+        var assetBeat = await context.AssetBeats.SingleAsync(ab => ab.AssetId == created.Id && ab.BeatId == beatId);
+        assetBeat.OrderInBeat = 3;
+        await context.SaveChangesAsync();
+
+        var updated = await service.UpdateAsync(created.Id, new UpdateAssetRequest(
+            assetTypeId, "A-01", "Updated title", null, "Shot", null, 1, null,
+            null,
+            new[] { beatId }));
+
+        Assert.NotNull(updated);
+        Assert.Equal(new[] { beatId }, updated!.BeatIds);
+        var persisted = await context.AssetBeats.AsNoTracking()
+            .SingleAsync(ab => ab.AssetId == created.Id && ab.BeatId == beatId);
+        Assert.Equal(3, persisted.OrderInBeat);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_leaves_OrderInBeat_null_for_newly_added_beat_links()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, beatId) = await SeedAsync(context);
+        var episode = (await context.Episodes.FindAsync(episodeId))!;
+        var newBeat = new Beat { Episode = episode, Timecode = "01:00", Purpose = "New beat" };
+        context.Beats.Add(newBeat);
+        await context.SaveChangesAsync();
+
+        var service = new AssetService(context);
+        var created = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-01", "Original title", null, "Planned", null, 1, null,
+            null,
+            new[] { beatId }));
+
+        var assetBeat = await context.AssetBeats.SingleAsync(ab => ab.AssetId == created.Id && ab.BeatId == beatId);
+        assetBeat.OrderInBeat = 5;
+        await context.SaveChangesAsync();
+
+        var updated = await service.UpdateAsync(created.Id, new UpdateAssetRequest(
+            assetTypeId, "A-01", "Updated title", null, "Shot", null, 1, null,
+            null,
+            new[] { beatId, newBeat.Id }));
+
+        Assert.NotNull(updated);
+        Assert.Equal(new[] { beatId, newBeat.Id }, updated!.BeatIds);
+
+        var existingLink = await context.AssetBeats.AsNoTracking()
+            .SingleAsync(ab => ab.AssetId == created.Id && ab.BeatId == beatId);
+        Assert.Equal(5, existingLink.OrderInBeat);
+
+        var newLink = await context.AssetBeats.AsNoTracking()
+            .SingleAsync(ab => ab.AssetId == created.Id && ab.BeatId == newBeat.Id);
+        Assert.Null(newLink.OrderInBeat);
+    }
+
     private static CreateAssetRequest MinimalRequest(int assetTypeId, string code) => new(
         assetTypeId, code, code, null, "Planned", null, null, null, null, null);
 }
