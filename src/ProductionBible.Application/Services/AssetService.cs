@@ -75,6 +75,10 @@ public class AssetService : IAssetService
         asset.Notes = request.Notes;
         asset.SequenceNumber = request.SequenceNumber;
         asset.TargetLengthSeconds = request.TargetLengthSeconds;
+        if (asset.PhaseId != request.PhaseId)
+        {
+            asset.OrderInPhase = null;
+        }
         asset.PhaseId = request.PhaseId;
 
         _db.AssetAttributes.RemoveRange(asset.Attributes);

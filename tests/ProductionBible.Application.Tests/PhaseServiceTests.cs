@@ -117,6 +117,38 @@ public class PhaseServiceTests
     }
 
     [Fact]
+    public async Task DeleteAsync_clears_OrderInPhase_on_dependent_assets_alongside_PhaseId()
+    {
+        await using var context = CreateInMemoryContext();
+        var projectId = await SeedProjectAsync(context);
+        var project = (await context.Projects.FindAsync(projectId))!;
+        var episode = new Episode { Project = project, Name = "EP1", OrderIndex = 1 };
+        var assetType = new AssetType { Name = "Shot" };
+        var phase = new Phase { Project = project, Name = "Phase 1: Setup A", OrderIndex = 0 };
+        context.Episodes.Add(episode);
+        context.AssetTypes.Add(assetType);
+        context.Phases.Add(phase);
+        await context.SaveChangesAsync();
+        var asset = new Asset
+        {
+            Episode = episode, AssetType = assetType, Code = "A-01", Title = "Title",
+            PhaseId = phase.Id, OrderInPhase = 0,
+        };
+        context.Assets.Add(asset);
+        await context.SaveChangesAsync();
+        var assetId = asset.Id;
+        var service = new PhaseService(context);
+
+        var result = await service.DeleteAsync(phase.Id);
+
+        Assert.True(result);
+        var fetchedAsset = await context.Assets.FindAsync(assetId);
+        Assert.NotNull(fetchedAsset);
+        Assert.Null(fetchedAsset!.PhaseId);
+        Assert.Null(fetchedAsset.OrderInPhase);
+    }
+
+    [Fact]
     public async Task ReorderAsync_reassigns_OrderIndex_to_match_the_given_order()
     {
         await using var context = CreateInMemoryContext();

@@ -59,6 +59,7 @@ public class PhaseService : IPhaseService
         foreach (var asset in assets)
         {
             asset.PhaseId = null;
+            asset.OrderInPhase = null;
         }
 
         _db.Phases.Remove(phase);

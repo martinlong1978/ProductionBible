@@ -34,6 +34,13 @@ export function buildPhaseGroups(
       assets: sortAssets(byPhase.get(phase.id) ?? []),
     }));
 
+  const knownPhaseIds = new Set(phaseGroups.map((g) => g.phaseId));
+  for (const [phaseId, assetsForPhase] of byPhase) {
+    if (!knownPhaseIds.has(phaseId)) {
+      unphased.push(...assetsForPhase);
+    }
+  }
+
   const unphasedGroup = unphased.length > 0
     ? { phaseId: null, phase: 'Unphased', assets: sortAssets(unphased) }
     : null;

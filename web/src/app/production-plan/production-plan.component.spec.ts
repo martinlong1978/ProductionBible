@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { signal } from '@angular/core';
 import { ProductionPlanComponent } from './production-plan.component';
 import { ApiClientService } from '../core/api-client.service';
@@ -70,6 +70,16 @@ describe('buildPhaseGroups', () => {
     const { phaseGroups } = buildPhaseGroups([], [phase1]);
     expect(phaseGroups).toEqual([{ phaseId: phase1.id, phase: phase1.name, assets: [] }]);
   });
+
+  it('sweeps an asset whose phaseId matches no fetched phase into unphasedGroup instead of dropping it', () => {
+    const { phaseGroups, unphasedGroup } = buildPhaseGroups(
+      [asset(1, 'A-01', 1, phase1.id), asset(2, 'X-99', 2, 999)],
+      [phase1],
+    );
+    expect(phaseGroups).toEqual([{ phaseId: phase1.id, phase: phase1.name, assets: [asset(1, 'A-01', 1, phase1.id)] }]);
+    expect(unphasedGroup).not.toBeNull();
+    expect(unphasedGroup!.assets.map((a) => a.code)).toEqual(['X-99']);
+  });
 });
 
 describe('ProductionPlanComponent', () => {
@@ -131,14 +141,20 @@ describe('ProductionPlanComponent', () => {
   });
 
   it('reorders phases in place and calls reorderPhases with the new order, ignoring a drop outside the container', () => {
-    apiSpy.reorderPhases.and.returnValue(of(undefined));
+    const reorder$ = new Subject<void>();
+    apiSpy.reorderPhases.and.returnValue(reorder$);
 
     component.onPhaseDrop({ previousIndex: 0, currentIndex: 1, isPointerOverContainer: false } as any);
     expect(apiSpy.reorderPhases).not.toHaveBeenCalled();
 
     component.onPhaseDrop({ previousIndex: 0, currentIndex: 1, isPointerOverContainer: true } as any);
-    expect(component.phaseGroups.map((g) => g.phaseId)).toEqual([phase2.id, phase1.id]);
+    expect(component.phaseGroups.map((g) => g.phaseId)).toEqual([phase2.id, phase1.id]); // optimistic, pre-reload
     expect(apiSpy.reorderPhases).toHaveBeenCalledWith(1, [phase2.id, phase1.id]);
+
+    apiSpy.getPhases.and.returnValue(of([{ ...phase2, orderIndex: 0 }, { ...phase1, orderIndex: 1 }]));
+    reorder$.next();
+    reorder$.complete();
+    expect(component.phaseGroups.map((g) => g.phaseId)).toEqual([phase2.id, phase1.id]); // reconciled
   });
 
   it('ignores a no-op phase drop (previousIndex === currentIndex)', () => {
@@ -151,11 +167,17 @@ describe('ProductionPlanComponent', () => {
     const group = { phaseId: phase1.id, phase: phase1.name, assets: [
       asset(1, 'A-01', 1, phase1.id), asset(2, 'A-02', 2, phase1.id),
     ] };
-    apiSpy.reorderAssetsWithinPhase.and.returnValue(of(undefined));
+    const reorder$ = new Subject<void>();
+    apiSpy.reorderAssetsWithinPhase.and.returnValue(reorder$);
 
     component.onShotDrop(group, { previousIndex: 0, currentIndex: 1, isPointerOverContainer: true } as any);
 
-    expect(group.assets.map((a) => a.id)).toEqual([2, 1]);
+    expect(group.assets.map((a) => a.id)).toEqual([2, 1]); // optimistic, pre-reload
     expect(apiSpy.reorderAssetsWithinPhase).toHaveBeenCalledWith(phase1.id, [2, 1]);
+
+    reorder$.next();
+    reorder$.complete();
+    expect(group.assets.map((a) => a.id)).toEqual([2, 1]); // reconciled (this fixture is not in
+    // component.phaseGroups, so the reload cannot touch it either way)
   });
 });

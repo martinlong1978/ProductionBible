@@ -49,13 +49,14 @@ export class ProductionPlanComponent {
     if (!event.isPointerOverContainer) return;
     if (event.previousIndex === event.currentIndex) return;
     if (group.phaseId === null) return;
-    const phaseId = group.phaseId;
     const projectId = this.projectContext.selectedProjectId();
+    if (projectId === null) return;
+    const phaseId = group.phaseId;
     moveItemInArray(group.assets, event.previousIndex, event.currentIndex);
     const orderedIds = group.assets.map((a) => a.id);
     this.cdr.markForCheck();
     this.api.reorderAssetsWithinPhase(phaseId, orderedIds).subscribe(() => {
-      if (projectId !== null) this.loadGroups(projectId);
+      this.loadGroups(projectId);
     });
   }
 
@@ -66,8 +67,9 @@ export class ProductionPlanComponent {
     }).subscribe(({ episodes, phases }) => {
       if (this.projectContext.selectedProjectId() !== projectId) return;
       if (episodes.length === 0) {
-        this.phaseGroups = [];
-        this.unphasedGroup = null;
+        const { phaseGroups, unphasedGroup } = buildPhaseGroups([], phases);
+        this.phaseGroups = phaseGroups;
+        this.unphasedGroup = unphasedGroup;
         this.cdr.markForCheck();
         return;
       }
