@@ -24,7 +24,7 @@
 
   <app-projects-tab *ngIf="activeTab === 'projects'"></app-projects-tab>
   <app-episodes-tab *ngIf="activeTab === 'episodes'"></app-episodes-tab>
-  <section *ngIf="activeTab === 'phases'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Phases tab coming in Task 6.</section>
+  <app-phases-tab *ngIf="activeTab === 'phases'"></app-phases-tab>
   <section *ngIf="activeTab === 'beats'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Beats tab coming in Task 7.</section>
   <section *ngIf="activeTab === 'assets'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Assets tab coming in Task 8.</section>
 </div>
