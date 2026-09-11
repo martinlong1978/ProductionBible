@@ -6,4 +6,5 @@ public class AssetBeat
     public Asset? Asset { get; set; }
     public int BeatId { get; set; }
     public Beat? Beat { get; set; }
+    public int? OrderInBeat { get; set; }
 }
