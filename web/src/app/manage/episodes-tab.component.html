@@ -1,0 +1,64 @@
+<div class="space-y-4">
+  <div class="rounded-lg border border-border bg-surface">
+    <table class="w-full text-left text-sm">
+      <thead>
+        <tr class="border-b border-border text-xs uppercase tracking-wide text-text-secondary">
+          <th class="px-4 py-2">Order</th>
+          <th class="px-4 py-2">Name</th>
+          <th class="px-4 py-2"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let episode of episodes" class="border-b border-border last:border-0 hover:bg-surface-hover">
+          <ng-container *ngIf="editingId !== episode.id; else editRow">
+            <td class="px-4 py-2 text-text-secondary">{{ episode.orderIndex }}</td>
+            <td class="px-4 py-2 font-medium">{{ episode.name }}</td>
+            <td class="px-4 py-2 text-right">
+              <button type="button" (click)="startEdit(episode)"
+                      class="rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-hover">Edit</button>
+              <button type="button" *ngIf="confirmingDeleteId !== episode.id" (click)="confirmDelete(episode.id)"
+                      class="ml-2 rounded-md border border-border px-2 py-1 text-xs font-medium text-status-error hover:bg-surface-hover">Delete</button>
+              <ng-container *ngIf="confirmingDeleteId === episode.id">
+                <button type="button" (click)="confirmDelete(episode.id)"
+                        class="ml-2 rounded-md border border-status-error px-2 py-1 text-xs font-medium text-status-error hover:bg-surface-hover">Really delete?</button>
+                <button type="button" (click)="cancelDelete()"
+                        class="ml-2 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-hover">Cancel</button>
+              </ng-container>
+            </td>
+          </ng-container>
+          <ng-template #editRow>
+            <td class="px-4 py-2">
+              <input type="number" [(ngModel)]="editOrderIndex"
+                     class="w-20 rounded-md border border-border bg-bg px-2 py-1 text-sm focus:border-accent focus:outline-none" />
+            </td>
+            <td class="px-4 py-2">
+              <input type="text" [(ngModel)]="editName"
+                     class="w-full rounded-md border border-border bg-bg px-2 py-1 text-sm focus:border-accent focus:outline-none" />
+            </td>
+            <td class="px-4 py-2 text-right">
+              <button type="button" (click)="saveEdit(episode)"
+                      class="rounded-md bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover">Save</button>
+              <button type="button" (click)="cancelEdit()"
+                      class="ml-2 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-hover">Cancel</button>
+            </td>
+          </ng-template>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4">
+    <label class="text-sm">
+      <span class="mb-1 block text-text-secondary">Name</span>
+      <input type="text" [(ngModel)]="newName"
+             class="rounded-md border border-border bg-bg px-3 py-1.5 text-sm focus:border-accent focus:outline-none" />
+    </label>
+    <label class="text-sm">
+      <span class="mb-1 block text-text-secondary">Order</span>
+      <input type="number" [(ngModel)]="newOrderIndex"
+             class="w-20 rounded-md border border-border bg-bg px-3 py-1.5 text-sm focus:border-accent focus:outline-none" />
+    </label>
+    <button type="button" (click)="create()"
+            class="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover">Add episode</button>
+  </div>
+</div>
