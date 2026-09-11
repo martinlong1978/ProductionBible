@@ -88,4 +88,21 @@ public class PhaseServiceTests
         Assert.True(deleted);
         Assert.Null(fetched);
     }
+
+    [Fact]
+    public async Task ReorderAsync_reassigns_OrderIndex_to_match_the_given_order()
+    {
+        await using var context = CreateInMemoryContext();
+        var projectId = await SeedProjectAsync(context);
+        var service = new PhaseService(context);
+        var phaseA = await service.CreateAsync(projectId, new CreatePhaseRequest("Setup A", 0));
+        var phaseC = await service.CreateAsync(projectId, new CreatePhaseRequest("Setup C", 1));
+
+        var result = await service.ReorderAsync(projectId, new[] { phaseC.Id, phaseA.Id });
+
+        Assert.True(result);
+        var reordered = await service.GetByProjectAsync(projectId);
+        Assert.Equal("Setup C", reordered[0].Name);
+        Assert.Equal("Setup A", reordered[1].Name);
+    }
 }

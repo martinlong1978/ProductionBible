@@ -59,4 +59,21 @@ public class PhaseService : IPhaseService
         await _db.SaveChangesAsync();
         return true;
     }
+
+    public async Task<bool> ReorderAsync(int projectId, int[] orderedPhaseIds)
+    {
+        var phases = await _db.Phases.Where(p => p.ProjectId == projectId).ToListAsync();
+        if (phases.Count != orderedPhaseIds.Length) return false;
+
+        var phasesById = phases.ToDictionary(p => p.Id);
+        if (orderedPhaseIds.Any(id => !phasesById.ContainsKey(id))) return false;
+
+        for (var i = 0; i < orderedPhaseIds.Length; i++)
+        {
+            phasesById[orderedPhaseIds[i]].OrderIndex = i;
+        }
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
 }

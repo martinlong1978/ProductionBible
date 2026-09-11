@@ -124,6 +124,48 @@ public class BeatServiceTests
 
         Assert.Equal(new[] { assetC.Id, assetA.Id, assetB.Id }, beats[0].AssetIds);
     }
+
+    [Fact]
+    public async Task ReorderAsync_reassigns_Ordinal_to_match_the_given_order()
+    {
+        await using var context = CreateInMemoryContext();
+        var project = new Project { Name = "HalfNut ELS" };
+        var episode = new Episode { Project = project, Name = "EP1", OrderIndex = 1 };
+        var beatA = new Beat { Episode = episode, SourceTimecode = "00:00", Ordinal = 0, DurationSeconds = 60, Purpose = "A" };
+        var beatB = new Beat { Episode = episode, SourceTimecode = "01:00", Ordinal = 1, DurationSeconds = 60, Purpose = "B" };
+        context.Beats.AddRange(beatA, beatB);
+        await context.SaveChangesAsync();
+        var service = new BeatService(context);
+
+        var result = await service.ReorderAsync(episode.Id, new[] { beatB.Id, beatA.Id });
+
+        Assert.True(result);
+        var reordered = await service.GetByEpisodeAsync(episode.Id);
+        Assert.Equal("B", reordered[0].Purpose);
+        Assert.Equal(0, reordered[0].Ordinal);
+        Assert.Equal("A", reordered[1].Purpose);
+        Assert.Equal(1, reordered[1].Ordinal);
+    }
+
+    [Fact]
+    public async Task ReorderAsync_rejects_an_id_that_does_not_belong_to_the_episode_and_writes_nothing()
+    {
+        await using var context = CreateInMemoryContext();
+        var project = new Project { Name = "HalfNut ELS" };
+        var episodeA = new Episode { Project = project, Name = "EP1", OrderIndex = 1 };
+        var episodeB = new Episode { Project = project, Name = "EP2", OrderIndex = 2 };
+        var beatA = new Beat { Episode = episodeA, SourceTimecode = "00:00", Ordinal = 0, DurationSeconds = 60, Purpose = "A" };
+        var beatFromOtherEpisode = new Beat { Episode = episodeB, SourceTimecode = "00:00", Ordinal = 0, DurationSeconds = 60, Purpose = "Other" };
+        context.Beats.AddRange(beatA, beatFromOtherEpisode);
+        await context.SaveChangesAsync();
+        var service = new BeatService(context);
+
+        var result = await service.ReorderAsync(episodeA.Id, new[] { beatFromOtherEpisode.Id, beatA.Id });
+
+        Assert.False(result);
+        var unchanged = await service.GetByEpisodeAsync(episodeA.Id);
+        Assert.Equal(0, unchanged.Single().Ordinal);
+    }
 }
 
 public class BeatServiceOrderingTests

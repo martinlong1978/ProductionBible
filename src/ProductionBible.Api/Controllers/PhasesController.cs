@@ -45,4 +45,11 @@ public class PhasesController : ControllerBase
         var deleted = await _service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }
+
+    [HttpPatch("api/projects/{projectId:int}/phases/reorder")]
+    public async Task<IActionResult> Reorder(int projectId, ReorderRequest request)
+    {
+        var succeeded = await _service.ReorderAsync(projectId, request.OrderedIds);
+        return succeeded ? NoContent() : BadRequest();
+    }
 }

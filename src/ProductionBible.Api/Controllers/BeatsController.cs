@@ -45,4 +45,11 @@ public class BeatsController : ControllerBase
         var deleted = await _service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }
+
+    [HttpPatch("api/episodes/{episodeId:int}/beats/reorder")]
+    public async Task<IActionResult> Reorder(int episodeId, ReorderRequest request)
+    {
+        var succeeded = await _service.ReorderAsync(episodeId, request.OrderedIds);
+        return succeeded ? NoContent() : BadRequest();
+    }
 }

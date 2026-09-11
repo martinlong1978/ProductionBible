@@ -88,4 +88,21 @@ public class BeatService : IBeatService
         await _db.SaveChangesAsync();
         return true;
     }
+
+    public async Task<bool> ReorderAsync(int episodeId, int[] orderedBeatIds)
+    {
+        var beats = await _db.Beats.Where(b => b.EpisodeId == episodeId).ToListAsync();
+        if (beats.Count != orderedBeatIds.Length) return false;
+
+        var beatsById = beats.ToDictionary(b => b.Id);
+        if (orderedBeatIds.Any(id => !beatsById.ContainsKey(id))) return false;
+
+        for (var i = 0; i < orderedBeatIds.Length; i++)
+        {
+            beatsById[orderedBeatIds[i]].Ordinal = i;
+        }
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
 }

@@ -9,4 +9,6 @@ public interface IAssetService
     Task<AssetDto> CreateAsync(int episodeId, CreateAssetRequest request);
     Task<AssetDto?> UpdateAsync(int id, UpdateAssetRequest request);
     Task<bool> DeleteAsync(int id);
+    Task<bool> ReorderWithinPhaseAsync(int phaseId, int[] orderedAssetIds);
+    Task<bool> ReorderWithinBeatAsync(int beatId, int[] orderedAssetIds);
 }

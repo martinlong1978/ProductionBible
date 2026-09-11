@@ -180,6 +180,53 @@ public class AssetServiceTests
         Assert.Null(newLink.OrderInBeat);
     }
 
+    [Fact]
+    public async Task ReorderWithinPhaseAsync_reassigns_SequenceNumber_to_match_the_given_order()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, _) = await SeedAsync(context);
+        var project = (await context.Episodes.FindAsync(episodeId))!.Project;
+        var phase = new Phase { Project = project, Name = "Setup A", OrderIndex = 0 };
+        context.Phases.Add(phase);
+        await context.SaveChangesAsync();
+        var service = new AssetService(context);
+        var assetA = await service.CreateAsync(episodeId, MinimalRequest(assetTypeId, "A-01"));
+        var assetB = await service.CreateAsync(episodeId, MinimalRequest(assetTypeId, "A-02"));
+        (await context.Assets.FindAsync(assetA.Id))!.PhaseId = phase.Id;
+        (await context.Assets.FindAsync(assetB.Id))!.PhaseId = phase.Id;
+        await context.SaveChangesAsync();
+
+        var result = await service.ReorderWithinPhaseAsync(phase.Id, new[] { assetB.Id, assetA.Id });
+
+        Assert.True(result);
+        var reorderedB = await service.GetByIdAsync(assetB.Id);
+        var reorderedA = await service.GetByIdAsync(assetA.Id);
+        Assert.Equal(0, reorderedB!.SequenceNumber);
+        Assert.Equal(1, reorderedA!.SequenceNumber);
+    }
+
+    [Fact]
+    public async Task ReorderWithinBeatAsync_reassigns_OrderInBeat_to_match_the_given_order()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, beatId) = await SeedAsync(context);
+        var service = new AssetService(context);
+        var assetA = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-01", "A", null, "Planned", null, null, null, null, new[] { beatId }));
+        var assetB = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-02", "B", null, "Planned", null, null, null, null, new[] { beatId }));
+
+        var result = await service.ReorderWithinBeatAsync(beatId, new[] { assetB.Id, assetA.Id });
+
+        Assert.True(result);
+        var orderInBeatForB = await context.AssetBeats.AsNoTracking()
+            .Where(ab => ab.BeatId == beatId && ab.AssetId == assetB.Id).Select(ab => ab.OrderInBeat).SingleAsync();
+        var orderInBeatForA = await context.AssetBeats.AsNoTracking()
+            .Where(ab => ab.BeatId == beatId && ab.AssetId == assetA.Id).Select(ab => ab.OrderInBeat).SingleAsync();
+        Assert.Equal(0, orderInBeatForB);
+        Assert.Equal(1, orderInBeatForA);
+    }
+
     private static CreateAssetRequest MinimalRequest(int assetTypeId, string code) => new(
         assetTypeId, code, code, null, "Planned", null, null, null, null, null);
 }

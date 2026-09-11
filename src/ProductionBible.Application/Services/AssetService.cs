@@ -103,6 +103,40 @@ public class AssetService : IAssetService
         return true;
     }
 
+    public async Task<bool> ReorderWithinPhaseAsync(int phaseId, int[] orderedAssetIds)
+    {
+        var assets = await _db.Assets.Where(a => a.PhaseId == phaseId).ToListAsync();
+        if (assets.Count != orderedAssetIds.Length) return false;
+
+        var assetsById = assets.ToDictionary(a => a.Id);
+        if (orderedAssetIds.Any(id => !assetsById.ContainsKey(id))) return false;
+
+        for (var i = 0; i < orderedAssetIds.Length; i++)
+        {
+            assetsById[orderedAssetIds[i]].SequenceNumber = i;
+        }
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> ReorderWithinBeatAsync(int beatId, int[] orderedAssetIds)
+    {
+        var assetBeats = await _db.AssetBeats.Where(ab => ab.BeatId == beatId).ToListAsync();
+        if (assetBeats.Count != orderedAssetIds.Length) return false;
+
+        var assetBeatsByAssetId = assetBeats.ToDictionary(ab => ab.AssetId);
+        if (orderedAssetIds.Any(id => !assetBeatsByAssetId.ContainsKey(id))) return false;
+
+        for (var i = 0; i < orderedAssetIds.Length; i++)
+        {
+            assetBeatsByAssetId[orderedAssetIds[i]].OrderInBeat = i;
+        }
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
     private static void ApplyAttributes(Asset asset, Dictionary<string, string>? attributes)
     {
         if (attributes is null) return;
