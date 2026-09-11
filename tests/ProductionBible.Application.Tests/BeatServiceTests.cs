@@ -92,4 +92,66 @@ public class BeatServiceTests
         Assert.True(deleted);
         Assert.Null(await service.GetByIdAsync(created.Id));
     }
+
+    [Fact]
+    public async Task GetByEpisodeAsync_returns_beats_in_timecode_order_not_creation_order()
+    {
+        await using var context = CreateInMemoryContext();
+        var episodeId = await SeedEpisodeAsync(context);
+        var service = new BeatService(context);
+        // Create out of chronological order, matching the real-world bug: beats get created
+        // in production_plan.md's shooting-setup order, not story order.
+        await service.CreateAsync(episodeId, new CreateBeatRequest("13:30", "Later beat"));
+        await service.CreateAsync(episodeId, new CreateBeatRequest("00:00", "Cold open"));
+        await service.CreateAsync(episodeId, new CreateBeatRequest("04:00", "Middle beat"));
+
+        var beats = await service.GetByEpisodeAsync(episodeId);
+
+        Assert.Equal(new[] { "00:00", "04:00", "13:30" }, beats.Select(b => b.Timecode));
+    }
+
+    [Fact]
+    public async Task GetByEpisodeAsync_sorts_unparseable_timecodes_last()
+    {
+        await using var context = CreateInMemoryContext();
+        var episodeId = await SeedEpisodeAsync(context);
+        var service = new BeatService(context);
+        await service.CreateAsync(episodeId, new CreateBeatRequest(
+            "Reused in EP1 20:30 · EP3 12:00", "Unscheduled safety card"));
+        await service.CreateAsync(episodeId, new CreateBeatRequest("00:00", "Cold open"));
+
+        var beats = await service.GetByEpisodeAsync(episodeId);
+
+        Assert.Equal("00:00", beats[0].Timecode);
+        Assert.Equal("Reused in EP1 20:30 · EP3 12:00", beats[1].Timecode);
+    }
+
+    [Fact]
+    public async Task GetByEpisodeAsync_orders_assetIds_by_OrderInBeat_with_nulls_last()
+    {
+        await using var context = CreateInMemoryContext();
+        var episodeId = await SeedEpisodeAsync(context);
+        var assetType = new AssetType { Name = "Shot" };
+        context.AssetTypes.Add(assetType);
+        var beat = new Beat { EpisodeId = episodeId, Timecode = "00:00", Purpose = "Cold open" };
+        context.Beats.Add(beat);
+        var assetA = new Asset { EpisodeId = episodeId, AssetType = assetType, Code = "A-01", Title = "First" };
+        var assetB = new Asset { EpisodeId = episodeId, AssetType = assetType, Code = "A-02", Title = "Second" };
+        var assetC = new Asset { EpisodeId = episodeId, AssetType = assetType, Code = "A-03", Title = "Unknown position" };
+        context.Assets.AddRange(assetA, assetB, assetC);
+        await context.SaveChangesAsync();
+        // Added out of order, with B having no known position (null). The expected final
+        // order (C, A, B) deliberately differs from ascending AssetId order (A, B, C),
+        // descending AssetId order (C, B, A), and this .Add() call order (C, B, A) too --
+        // so the test can only pass if the code genuinely sorts by OrderInBeat.
+        context.AssetBeats.Add(new AssetBeat { AssetId = assetC.Id, BeatId = beat.Id, OrderInBeat = 0 });
+        context.AssetBeats.Add(new AssetBeat { AssetId = assetB.Id, BeatId = beat.Id, OrderInBeat = null });
+        context.AssetBeats.Add(new AssetBeat { AssetId = assetA.Id, BeatId = beat.Id, OrderInBeat = 1 });
+        await context.SaveChangesAsync();
+
+        var service = new BeatService(context);
+        var beats = await service.GetByEpisodeAsync(episodeId);
+
+        Assert.Equal(new[] { assetC.Id, assetA.Id, assetB.Id }, beats[0].AssetIds);
+    }
 }

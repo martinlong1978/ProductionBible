@@ -15,15 +15,13 @@ describe('TimelineViewComponent', () => {
   }
 
   const beats: BeatDto[] = [
-    { id: 1, episodeId: 1, timecode: '00:00', purpose: 'Cold open', assetIds: [2, 1] },
+    { id: 1, episodeId: 1, timecode: '00:00', purpose: 'Cold open', assetIds: [1, 2] },
     { id: 2, episodeId: 1, timecode: '02:00', purpose: 'Graphic', assetIds: [3] },
   ];
   const assets: AssetDto[] = [
-    asset(1, 'Shot', 'A-01'),
-    asset(2, 'PieceToCamera', 'E-S'),
+    asset(1, 'PieceToCamera', 'E-S'),
+    asset(2, 'Shot', 'A-01'),
     asset(3, 'Animation', 'g1_gears'),
-    asset(4, 'Title', 't1_title'),
-    asset(5, 'Flyover', 'f1'),
   ];
 
   beforeEach(async () => {
@@ -36,23 +34,21 @@ describe('TimelineViewComponent', () => {
     fixture.detectChanges();
   });
 
-  it('groups assets into lanes by asset type', () => {
-    const laneNames = component.lanes.map((lane) => lane.name);
-    expect(laneNames).toEqual(['A-Roll', 'B-Roll', 'Animations', 'Titles', 'Other']);
+  it('builds one row per beat, in timecode order', () => {
+    expect(component.timeline.rows.map((r) => r.beat.timecode)).toEqual(['00:00', '02:00']);
   });
 
-  it('orders assets within the B-Roll lane by beat sequence, not asset id', () => {
-    const bRoll = component.lanes.find((lane) => lane.name === 'B-Roll')!;
-    expect(bRoll.assets.map((a) => a.code)).toEqual(['A-01']);
+  it('assigns assets to the correct tracks', () => {
+    expect(component.timeline.rows[0].tracks['dialogue'].map((c) => c.asset.code)).toEqual(['E-S']);
+    expect(component.timeline.rows[0].tracks['broll'].map((c) => c.asset.code)).toEqual(['A-01']);
+    expect(component.timeline.rows[1].tracks['graphics'].map((c) => c.asset.code)).toEqual(['g1_gears']);
   });
 
-  it('orders the A-Roll lane correctly when the beat lists the asset before others', () => {
-    const aRoll = component.lanes.find((lane) => lane.name === 'A-Roll')!;
-    expect(aRoll.assets.map((a) => a.code)).toEqual(['E-S']);
-  });
+  it('re-derives the timeline when inputs change via ngOnChanges', () => {
+    component.beats = [{ id: 3, episodeId: 1, timecode: '10:00', purpose: 'Later', assetIds: [] }];
+    component.assets = [];
+    component.ngOnChanges();
 
-  it('puts an asset type with no lane mapping into Other', () => {
-    const other = component.lanes.find((lane) => lane.name === 'Other')!;
-    expect(other.assets.map((a) => a.code)).toEqual(['f1']);
+    expect(component.timeline.rows.map((r) => r.beat.timecode)).toEqual(['10:00']);
   });
 });

@@ -10,6 +10,7 @@ public class ImportMapper
     private readonly Dictionary<int, Episode> _episodesByNumber = new();
     private readonly Dictionary<string, AssetType> _assetTypesByName = new();
     private readonly Dictionary<(int episodeNumber, string timecode), Beat> _beatsByKey = new();
+    private readonly Dictionary<(int episodeNumber, string code), Asset> _assetsByEpisodeAndCode = new();
 
     public ImportMapper(ProductionBibleDbContext db)
     {
@@ -70,6 +71,7 @@ public class ImportMapper
             }
 
             _db.Assets.Add(asset);
+            _assetsByEpisodeAndCode[(page.EpisodeNumber, normalizedCode)] = asset;
 
             foreach (var timecode in page.Timecodes)
             {
@@ -111,6 +113,66 @@ public class ImportMapper
             };
             AddAttribute(asset, "SourceScriptRef", row.Code);
             _db.Assets.Add(asset);
+            var animationEpisodeNumber = int.Parse(episodeMatch.Groups["ep"].Value);
+            _assetsByEpisodeAndCode[(animationEpisodeNumber, asset.Code)] = asset;
+        }
+
+        foreach (var beatEntry in CoverageCheckParser.Parse(storyboardHtml))
+        {
+            // Coverage Check entries include pure-graphic beats with no production_plan.md page
+            // at all (nothing to film — e.g. EP1 07:20 "The ELS idea, in one sentence"), so this
+            // is the only place such a Beat is ever created. GetOrCreateBeat is keyed by
+            // (episode, timecode) and checks _beatsByKey first, so a beat already created from a
+            // shot page's own timecode is reused here, never duplicated.
+            var beat = GetOrCreateBeat(project, beatEntry.EpisodeNumber, beatEntry.Timecode, purpose: "");
+
+            for (var i = 0; i < beatEntry.Codes.Count; i++)
+            {
+                var codeEntry = beatEntry.Codes[i];
+
+                if (!codeEntry.IsAnimation)
+                {
+                    if (!_assetsByEpisodeAndCode.TryGetValue((beatEntry.EpisodeNumber, codeEntry.Code), out var shotAsset))
+                    {
+                        Console.WriteLine(
+                            $"Warning: Coverage check shot code '{codeEntry.Code}' in EP{beatEntry.EpisodeNumber} " +
+                            $"{beatEntry.Timecode} has no matching asset; skipped.");
+                        continue;
+                    }
+
+                    var existingLink = beat.AssetBeats.FirstOrDefault(ab => ab.Asset == shotAsset);
+                    if (existingLink is null)
+                    {
+                        Console.WriteLine(
+                            $"Warning: Coverage check pairs '{codeEntry.Code}' with EP{beatEntry.EpisodeNumber} " +
+                            $"{beatEntry.Timecode}, but production_plan.md's own timecodes for that shot didn't; skipped.");
+                        continue;
+                    }
+
+                    existingLink.OrderInBeat = i;
+                }
+                else
+                {
+                    var animationAsset = ResolveAnimationCode(beatEntry.EpisodeNumber, codeEntry.Code);
+                    if (animationAsset is null)
+                    {
+                        Console.WriteLine(
+                            $"Warning: Coverage check animation code '{codeEntry.Code}' in EP{beatEntry.EpisodeNumber} " +
+                            $"{beatEntry.Timecode} has no matching asset (not yet built?); skipped.");
+                        continue;
+                    }
+
+                    var existingLink = beat.AssetBeats.FirstOrDefault(ab => ab.Asset == animationAsset);
+                    if (existingLink is not null)
+                    {
+                        existingLink.OrderInBeat = i;
+                    }
+                    else
+                    {
+                        _db.AssetBeats.Add(new AssetBeat { Asset = animationAsset, Beat = beat, OrderInBeat = i });
+                    }
+                }
+            }
         }
 
         await _db.SaveChangesAsync();
@@ -154,6 +216,27 @@ public class ImportMapper
         _beatsByKey[key] = beat;
         _db.Beats.Add(beat);
         return beat;
+    }
+
+    // Unlike shot/PTC codes (genuinely per-episode, e.g. "E-L" is a different Asset in every
+    // episode it's filmed in), an animation Asset is built once and can be *reused* across
+    // episodes (G1 is "EP1 07:20, reused EP2"; g5_defaults is built as EP2's asset but its
+    // Coverage Check reference at EP1 16:30 is a reuse of that same asset). So an exact/prefix
+    // match in the beat's own episode wins if one exists, but a match from any other episode is
+    // still a valid resolution — falling back to it, rather than reporting "not yet built",
+    // is what makes reuse across episodes actually resolve.
+    private Asset? ResolveAnimationCode(int episodeNumber, string code)
+    {
+        Asset? crossEpisodeMatch = null;
+        foreach (var ((ep, assetCode), asset) in _assetsByEpisodeAndCode)
+        {
+            var isMatch = string.Equals(assetCode, code, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(assetCode.Split('_')[0], code, StringComparison.OrdinalIgnoreCase);
+            if (!isMatch) continue;
+            if (ep == episodeNumber) return asset;
+            crossEpisodeMatch ??= asset;
+        }
+        return crossEpisodeMatch;
     }
 
     private static void AddAttribute(Asset asset, string key, string? value)

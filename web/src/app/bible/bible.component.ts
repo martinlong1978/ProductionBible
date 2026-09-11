@@ -53,7 +53,10 @@ export class BibleComponent {
   }
 
   assetsForBeat(beat: BeatDto): AssetDto[] {
-    return this.assets.filter((asset) => beat.assetIds.includes(asset.id));
+    const byId = new Map(this.assets.map((asset) => [asset.id, asset]));
+    return beat.assetIds
+      .map((id) => byId.get(id))
+      .filter((asset): asset is AssetDto => asset !== undefined);
   }
 
   get unassignedAssets(): AssetDto[] {

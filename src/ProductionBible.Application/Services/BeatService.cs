@@ -16,12 +16,27 @@ public class BeatService : IBeatService
 
     public async Task<IReadOnlyList<BeatDto>> GetByEpisodeAsync(int episodeId)
     {
-        return await _db.Beats
+        var beats = await _db.Beats
+            .Include(b => b.AssetBeats)
             .Where(b => b.EpisodeId == episodeId)
-            .Select(b => new BeatDto(
-                b.Id, b.EpisodeId, b.Timecode, b.Purpose,
-                b.AssetBeats.Select(ab => ab.AssetId).ToArray()))
             .ToListAsync();
+
+        return beats
+            .Select(b => new
+            {
+                Beat = b,
+                Parsed = TimecodeOrdering.TryParseSeconds(b.Timecode, out var seconds),
+                Seconds = seconds,
+            })
+            .OrderBy(x => x.Parsed ? 0 : 1)
+            .ThenBy(x => x.Seconds)
+            .Select(x => new BeatDto(
+                x.Beat.Id, x.Beat.EpisodeId, x.Beat.Timecode, x.Beat.Purpose,
+                x.Beat.AssetBeats
+                    .OrderBy(ab => ab.OrderInBeat ?? int.MaxValue)
+                    .Select(ab => ab.AssetId)
+                    .ToArray()))
+            .ToList();
     }
 
     public async Task<BeatDto?> GetByIdAsync(int id)

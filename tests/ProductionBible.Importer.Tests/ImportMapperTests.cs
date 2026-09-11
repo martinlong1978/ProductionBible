@@ -64,7 +64,7 @@ public class ImportMapperTests
     }
 
     [Fact]
-    public async Task Animation_rows_become_assets_with_no_sequence_number_and_no_beat_links()
+    public async Task Animation_rows_become_assets_with_no_sequence_number_but_are_linked_to_their_covering_beats()
     {
         await using var context = CreateInMemoryContext();
         var mapper = new ImportMapper(context);
@@ -72,12 +72,37 @@ public class ImportMapperTests
         await mapper.ImportAsync(LoadFixture("storyboard.html"), LoadFixture("production_plan.md"), "HalfNut ELS");
 
         var g1 = await context.Assets
-            .Include(a => a.AssetBeats)
+            .Include(a => a.AssetBeats).ThenInclude(ab => ab.Beat)
             .Include(a => a.AssetType)
             .SingleAsync(a => a.Code == "g1_gears");
         Assert.Equal("Animation", g1.AssetType!.Name);
         Assert.Null(g1.SequenceNumber);
-        Assert.Empty(g1.AssetBeats);
+
+        // Coverage Check table, EP1: "02:00 B-05 + G1" and "07:20 G1" — g1_gears covers both.
+        var timecodes = g1.AssetBeats.Select(ab => ab.Beat!.Timecode).OrderBy(t => t).ToList();
+        Assert.Equal(new List<string> { "02:00", "07:20" }, timecodes);
+    }
+
+    [Fact]
+    public async Task Coverage_check_sets_OrderInBeat_for_both_shot_and_animation_codes_in_the_same_beat()
+    {
+        await using var context = CreateInMemoryContext();
+        var mapper = new ImportMapper(context);
+
+        await mapper.ImportAsync(LoadFixture("storyboard.html"), LoadFixture("production_plan.md"), "HalfNut ELS");
+
+        // Coverage Check, EP1 "16:30": "G5, F-02, E-B" — G5 (animation) is listed FIRST.
+        var beat = await context.Beats
+            .Include(b => b.AssetBeats).ThenInclude(ab => ab.Asset)
+            .Include(b => b.Episode)
+            .SingleAsync(b => b.Episode!.Name == "EP1" && b.Timecode == "16:30");
+
+        var orderedCodes = beat.AssetBeats
+            .Where(ab => ab.OrderInBeat != null)
+            .OrderBy(ab => ab.OrderInBeat)
+            .Select(ab => ab.Asset!.Code)
+            .ToList();
+        Assert.Equal(new List<string> { "g5_defaults", "F-02", "E-B" }, orderedCodes);
     }
 
     // Task 15 review found a defect in the brief's given ImportMapper code: production_plan.md's 7
