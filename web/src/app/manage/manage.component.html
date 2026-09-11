@@ -1,0 +1,30 @@
+<div class="space-y-6">
+  <div class="inline-flex flex-wrap rounded-md border border-border bg-bg p-1">
+    <button type="button" data-tab="projects" (click)="setTab('projects')"
+            class="rounded px-3 py-1.5 text-sm font-medium transition-colors"
+            [class.bg-accent]="activeTab === 'projects'" [class.text-white]="activeTab === 'projects'"
+            [class.text-text-secondary]="activeTab !== 'projects'">Projects</button>
+    <button type="button" data-tab="episodes" (click)="setTab('episodes')"
+            class="rounded px-3 py-1.5 text-sm font-medium transition-colors"
+            [class.bg-accent]="activeTab === 'episodes'" [class.text-white]="activeTab === 'episodes'"
+            [class.text-text-secondary]="activeTab !== 'episodes'">Episodes</button>
+    <button type="button" data-tab="phases" (click)="setTab('phases')"
+            class="rounded px-3 py-1.5 text-sm font-medium transition-colors"
+            [class.bg-accent]="activeTab === 'phases'" [class.text-white]="activeTab === 'phases'"
+            [class.text-text-secondary]="activeTab !== 'phases'">Phases</button>
+    <button type="button" data-tab="beats" (click)="setTab('beats')"
+            class="rounded px-3 py-1.5 text-sm font-medium transition-colors"
+            [class.bg-accent]="activeTab === 'beats'" [class.text-white]="activeTab === 'beats'"
+            [class.text-text-secondary]="activeTab !== 'beats'">Beats</button>
+    <button type="button" data-tab="assets" (click)="setTab('assets')"
+            class="rounded px-3 py-1.5 text-sm font-medium transition-colors"
+            [class.bg-accent]="activeTab === 'assets'" [class.text-white]="activeTab === 'assets'"
+            [class.text-text-secondary]="activeTab !== 'assets'">Assets</button>
+  </div>
+
+  <section *ngIf="activeTab === 'projects'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Projects tab coming in Task 4.</section>
+  <section *ngIf="activeTab === 'episodes'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Episodes tab coming in Task 5.</section>
+  <section *ngIf="activeTab === 'phases'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Phases tab coming in Task 6.</section>
+  <section *ngIf="activeTab === 'beats'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Beats tab coming in Task 7.</section>
+  <section *ngIf="activeTab === 'assets'" class="rounded-lg border border-border bg-surface p-4 text-text-secondary">Assets tab coming in Task 8.</section>
+</div>
