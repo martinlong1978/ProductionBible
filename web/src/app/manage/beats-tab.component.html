@@ -1,0 +1,94 @@
+<div class="space-y-4">
+  <div class="flex items-center gap-3 rounded-lg border border-border bg-surface p-4">
+    <label for="beats-episode-select" class="text-sm font-medium text-text-secondary">Episode</label>
+    <select id="beats-episode-select" [ngModel]="selectedEpisodeId" (ngModelChange)="selectEpisode($event)"
+            class="rounded-md border border-border bg-bg px-3 py-1.5 text-sm text-text-primary focus:border-accent focus:outline-none">
+      <option *ngFor="let ep of episodes" [ngValue]="ep.id">{{ ep.name }}</option>
+    </select>
+  </div>
+
+  <div class="rounded-lg border border-border bg-surface">
+    <table class="w-full text-left text-sm">
+      <thead>
+        <tr class="border-b border-border text-xs uppercase tracking-wide text-text-secondary">
+          <th class="px-4 py-2">Ordinal</th>
+          <th class="px-4 py-2">Timecode</th>
+          <th class="px-4 py-2">Purpose</th>
+          <th class="px-4 py-2">Duration (s)</th>
+          <th class="px-4 py-2"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let beat of beats" class="border-b border-border last:border-0 hover:bg-surface-hover">
+          <ng-container *ngIf="editingId !== beat.id; else editRow">
+            <td class="px-4 py-2 text-text-secondary">{{ beat.ordinal }}</td>
+            <td class="px-4 py-2 font-mono">{{ beat.timecode }}</td>
+            <td class="px-4 py-2 font-medium">{{ beat.purpose }}</td>
+            <td class="px-4 py-2 text-text-secondary">{{ beat.durationSeconds }}</td>
+            <td class="px-4 py-2 text-right">
+              <button type="button" (click)="startEdit(beat)"
+                      class="rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-hover">Edit</button>
+              <button type="button" *ngIf="confirmingDeleteId !== beat.id" (click)="confirmDelete(beat.id)"
+                      class="ml-2 rounded-md border border-border px-2 py-1 text-xs font-medium text-status-error hover:bg-surface-hover">Delete</button>
+              <ng-container *ngIf="confirmingDeleteId === beat.id">
+                <button type="button" (click)="confirmDelete(beat.id)"
+                        class="ml-2 rounded-md border border-status-error px-2 py-1 text-xs font-medium text-status-error hover:bg-surface-hover">Really delete?</button>
+                <button type="button" (click)="cancelDelete()"
+                        class="ml-2 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-hover">Cancel</button>
+              </ng-container>
+            </td>
+          </ng-container>
+          <ng-template #editRow>
+            <td class="px-4 py-2">
+              <input type="number" [(ngModel)]="editOrdinal"
+                     class="w-16 rounded-md border border-border bg-bg px-2 py-1 text-sm focus:border-accent focus:outline-none" />
+            </td>
+            <td class="px-4 py-2">
+              <input type="text" [(ngModel)]="editTimecode"
+                     class="w-24 rounded-md border border-border bg-bg px-2 py-1 text-sm font-mono focus:border-accent focus:outline-none" />
+            </td>
+            <td class="px-4 py-2">
+              <input type="text" [(ngModel)]="editPurpose"
+                     class="w-full rounded-md border border-border bg-bg px-2 py-1 text-sm focus:border-accent focus:outline-none" />
+            </td>
+            <td class="px-4 py-2">
+              <input type="number" [(ngModel)]="editDurationSeconds"
+                     class="w-20 rounded-md border border-border bg-bg px-2 py-1 text-sm focus:border-accent focus:outline-none" />
+            </td>
+            <td class="px-4 py-2 text-right">
+              <button type="button" (click)="saveEdit(beat)"
+                      class="rounded-md bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover">Save</button>
+              <button type="button" (click)="cancelEdit()"
+                      class="ml-2 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-hover">Cancel</button>
+            </td>
+          </ng-template>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4">
+    <label class="text-sm">
+      <span class="mb-1 block text-text-secondary">Timecode</span>
+      <input type="text" [(ngModel)]="newTimecode" placeholder="00:00"
+             class="w-24 rounded-md border border-border bg-bg px-3 py-1.5 text-sm font-mono focus:border-accent focus:outline-none" />
+    </label>
+    <label class="text-sm">
+      <span class="mb-1 block text-text-secondary">Purpose</span>
+      <input type="text" [(ngModel)]="newPurpose"
+             class="rounded-md border border-border bg-bg px-3 py-1.5 text-sm focus:border-accent focus:outline-none" />
+    </label>
+    <label class="text-sm">
+      <span class="mb-1 block text-text-secondary">Ordinal</span>
+      <input type="number" [(ngModel)]="newOrdinal"
+             class="w-16 rounded-md border border-border bg-bg px-3 py-1.5 text-sm focus:border-accent focus:outline-none" />
+    </label>
+    <label class="text-sm">
+      <span class="mb-1 block text-text-secondary">Duration (s)</span>
+      <input type="number" [(ngModel)]="newDurationSeconds"
+             class="w-24 rounded-md border border-border bg-bg px-3 py-1.5 text-sm focus:border-accent focus:outline-none" />
+    </label>
+    <button type="button" (click)="create()"
+            class="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover">Add beat</button>
+  </div>
+</div>
