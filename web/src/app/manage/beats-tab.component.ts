@@ -1,4 +1,4 @@
-import { Component, effect } from '@angular/core';
+import { ChangeDetectorRef, Component, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
@@ -31,6 +31,7 @@ export class BeatsTabComponent {
 
   constructor(
     private readonly api: ApiClientService,
+    private readonly cdr: ChangeDetectorRef,
     protected readonly projectContext: ProjectContextService,
   ) {
     effect(() => {
@@ -52,6 +53,7 @@ export class BeatsTabComponent {
         this.selectedEpisodeId = null;
         this.beats = [];
       }
+      this.cdr.markForCheck();
     });
   }
 
@@ -63,6 +65,7 @@ export class BeatsTabComponent {
   private loadBeats(episodeId: number): void {
     this.api.getBeats(episodeId).subscribe((beats) => {
       this.beats = beats;
+      this.cdr.markForCheck();
     });
   }
 
@@ -77,6 +80,7 @@ export class BeatsTabComponent {
       this.newOrdinal = 0;
       this.newDurationSeconds = 0;
       this.loadBeats(this.selectedEpisodeId!);
+      this.cdr.markForCheck();
     });
   }
 
@@ -99,6 +103,7 @@ export class BeatsTabComponent {
     }).subscribe(() => {
       this.editingId = null;
       this.loadBeats(this.selectedEpisodeId!);
+      this.cdr.markForCheck();
     });
   }
 
@@ -110,6 +115,7 @@ export class BeatsTabComponent {
     this.api.deleteBeat(id).subscribe(() => {
       this.confirmingDeleteId = null;
       this.loadBeats(this.selectedEpisodeId!);
+      this.cdr.markForCheck();
     });
   }
 

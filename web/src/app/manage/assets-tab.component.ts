@@ -1,4 +1,4 @@
-import { Component, effect } from '@angular/core';
+import { ChangeDetectorRef, Component, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
@@ -49,10 +49,12 @@ export class AssetsTabComponent {
 
   constructor(
     private readonly api: ApiClientService,
+    private readonly cdr: ChangeDetectorRef,
     protected readonly projectContext: ProjectContextService,
   ) {
     this.api.getAssetTypes().subscribe((types) => {
       this.assetTypes = types;
+      this.cdr.markForCheck();
     });
 
     effect(() => {
@@ -67,6 +69,7 @@ export class AssetsTabComponent {
       }
       this.api.getPhases(projectId).subscribe((phases) => {
         this.phases = phases;
+        this.cdr.markForCheck();
       });
       this.loadEpisodes(projectId);
     });
@@ -81,6 +84,7 @@ export class AssetsTabComponent {
         this.assets = [];
         this.beats = [];
       }
+      this.cdr.markForCheck();
     });
   }
 
@@ -88,6 +92,7 @@ export class AssetsTabComponent {
     this.selectedEpisodeId = episodeId;
     this.api.getBeats(episodeId).subscribe((beats) => {
       this.beats = beats;
+      this.cdr.markForCheck();
     });
     this.loadAssets(episodeId);
   }
@@ -95,6 +100,7 @@ export class AssetsTabComponent {
   private loadAssets(episodeId: number): void {
     this.api.getAssets(episodeId).subscribe((assets) => {
       this.assets = assets;
+      this.cdr.markForCheck();
     });
   }
 
@@ -117,6 +123,7 @@ export class AssetsTabComponent {
       this.newTitle = '';
       this.newAssetTypeId = null;
       this.loadAssets(this.selectedEpisodeId!);
+      this.cdr.markForCheck();
     });
   }
 
@@ -174,6 +181,7 @@ export class AssetsTabComponent {
     }).subscribe(() => {
       this.editingId = null;
       this.loadAssets(this.selectedEpisodeId!);
+      this.cdr.markForCheck();
     });
   }
 
@@ -185,6 +193,7 @@ export class AssetsTabComponent {
     this.api.deleteAsset(id).subscribe(() => {
       this.confirmingDeleteId = null;
       this.loadAssets(this.selectedEpisodeId!);
+      this.cdr.markForCheck();
     });
   }
 

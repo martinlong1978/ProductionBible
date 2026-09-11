@@ -1,4 +1,4 @@
-import { Component, effect } from '@angular/core';
+import { ChangeDetectorRef, Component, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
@@ -27,6 +27,7 @@ export class PhasesTabComponent {
 
   constructor(
     private readonly api: ApiClientService,
+    private readonly cdr: ChangeDetectorRef,
     protected readonly projectContext: ProjectContextService,
   ) {
     effect(() => {
@@ -40,6 +41,7 @@ export class PhasesTabComponent {
   private load(projectId: number): void {
     this.api.getPhases(projectId).subscribe((phases) => {
       this.phases = phases;
+      this.cdr.markForCheck();
     });
   }
 
@@ -49,6 +51,7 @@ export class PhasesTabComponent {
       this.newName = '';
       this.newOrderIndex = 0;
       this.load(this.projectId!);
+      this.cdr.markForCheck();
     });
   }
 
@@ -66,6 +69,7 @@ export class PhasesTabComponent {
     this.api.updatePhase(phase.id, { name: this.editName, orderIndex: this.editOrderIndex }).subscribe(() => {
       this.editingId = null;
       this.load(this.projectId!);
+      this.cdr.markForCheck();
     });
   }
 
@@ -77,6 +81,7 @@ export class PhasesTabComponent {
     this.api.deletePhase(id).subscribe(() => {
       this.confirmingDeleteId = null;
       this.load(this.projectId!);
+      this.cdr.markForCheck();
     });
   }
 
