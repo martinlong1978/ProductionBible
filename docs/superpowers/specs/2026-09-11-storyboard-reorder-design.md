@@ -87,15 +87,16 @@ never drop into a different beat's list), with each `<li cdkDrag>` inside.
 onBeatDrop(event: CdkDragDrop<BeatDto[]>): void {
   moveItemInArray(this.beats, event.previousIndex, event.currentIndex);
   const orderedIds = this.beats.map((b) => b.id);
+  this.cdr.markForCheck();
   this.api.reorderBeats(this.selectedEpisodeId!, orderedIds).subscribe(() => {
     this.selectEpisode(this.selectedEpisodeId!);
   });
 }
 
 onAssetDrop(beat: BeatDto, event: CdkDragDrop<AssetDto[]>): void {
-  const assets = this.assetsForBeat(beat);
-  moveItemInArray(assets, event.previousIndex, event.currentIndex);
-  const orderedIds = assets.map((a) => a.id);
+  moveItemInArray(beat.assetIds, event.previousIndex, event.currentIndex);
+  const orderedIds = [...beat.assetIds];
+  this.cdr.markForCheck();
   this.api.reorderAssetsWithinBeat(beat.id, orderedIds).subscribe(() => {
     this.selectEpisode(this.selectedEpisodeId!);
   });
@@ -104,6 +105,32 @@ onAssetDrop(beat: BeatDto, event: CdkDragDrop<AssetDto[]>): void {
 
 `moveItemInArray` is `@angular/cdk/drag-drop`'s own array-splice helper —
 no hand-rolled array surgery needed.
+
+**Amended 2026-09-11, post-implementation:** the original version of this
+sample called `moveItemInArray` on the throwaway array returned by
+`assetsForBeat(beat)` rather than on `beat.assetIds` itself. Since
+`assetsForBeat()` recomputes a fresh array from `beat.assetIds` on every
+call rather than returning a stored reference, that version left
+`beat.assetIds` untouched — so the shot's optimistic move would never
+have been visible before the reconciling reload landed, silently
+contradicting this section's own "CDK moves the DOM item immediately"
+claim for shots specifically. The plan
+(`docs/superpowers/plans/2026-09-11-storyboard-reorder.md`, Task 3)
+caught this during implementation; the sample above reflects the
+corrected, shipped version. Both handlers also gained an explicit
+`this.cdr.markForCheck()` call right after the optimistic mutation —
+omitted from the original sample, but required in this zoneless app for
+the optimistic move to actually repaint (see Global Constraints in the
+plan). The final whole-branch review additionally found, and a follow-up
+fix corrected, two bugs not caught at design time: `onAssetDrop` needs an
+`event.isPointerOverContainer` guard (an attempted cross-beat drag can
+still sort-and-persist within the source beat even though the drop
+itself is correctly rejected), and it must derive `orderedIds` from the
+rendered list (`assetsForBeat(beat)`) rather than mapping raw
+`previousIndex`/`currentIndex` onto the unfiltered `beat.assetIds` array,
+which diverge whenever an asset id in `beat.assetIds` has no matching
+entry in `this.assets`. See the shipped `bible.component.ts` for the
+exact, reviewed code.
 
 ## API client additions
 
