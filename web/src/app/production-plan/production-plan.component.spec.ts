@@ -4,41 +4,71 @@ import { signal } from '@angular/core';
 import { ProductionPlanComponent } from './production-plan.component';
 import { ApiClientService } from '../core/api-client.service';
 import { ProjectContextService } from '../core/project-context.service';
-import { AssetDto, EpisodeDto, ProjectDto } from '../core/models';
+import { AssetDto, EpisodeDto, PhaseDto, ProjectDto } from '../core/models';
 import { buildPhaseGroups } from './phase-grouping';
 
-function asset(id: number, code: string, sequenceNumber: number, phase: string | undefined, episodeId = 10): AssetDto {
+function asset(
+  id: number, code: string, sequenceNumber: number | null, phaseId: number | null,
+  episodeId = 10, orderInPhase: number | null = null,
+): AssetDto {
   return {
     id, episodeId, assetTypeId: 1, assetTypeName: 'Shot', code, title: code,
     scriptText: null, status: 'Planned', notes: null, sequenceNumber, targetLengthSeconds: null,
-    phaseId: null, completedAtUtc: null, attributes: phase ? { PhaseGroup: phase } : {}, beatIds: [], orderInPhase: null,
+    phaseId, orderInPhase, completedAtUtc: null, attributes: {}, beatIds: [],
   };
 }
 
 describe('buildPhaseGroups', () => {
-  it('orders assets by sequence number across groups', () => {
-    const groups = buildPhaseGroups([
-      asset(2, 'F-01', 1, 'Phase 1: The software time machine'),
-      asset(1, 'B-02', 2, 'Phase 2: Makerspace trip'),
-    ]);
-    const allCodes = groups.flatMap((g) => g.assets.map((a) => a.code));
-    expect(allCodes).toEqual(['F-01', 'B-02']);
+  const phase1: PhaseDto = { id: 1, projectId: 1, name: 'Phase 1: The software time machine', orderIndex: 0 };
+  const phase2: PhaseDto = { id: 2, projectId: 1, name: 'Phase 2: Makerspace trip', orderIndex: 1 };
+
+  it('groups assets by phaseId, not by any attribute', () => {
+    const { phaseGroups } = buildPhaseGroups(
+      [asset(2, 'F-01', 1, phase1.id), asset(1, 'B-02', 2, phase2.id)],
+      [phase1, phase2],
+    );
+    expect(phaseGroups.map((g) => g.assets.map((a) => a.code))).toEqual([['F-01'], ['B-02']]);
   });
 
-  it('orders phase groups by the lowest sequence number in that phase', () => {
-    const groups = buildPhaseGroups([
-      asset(2, 'F-01', 1, 'Phase 1: The software time machine'),
-      asset(1, 'B-02', 2, 'Phase 2: Makerspace trip'),
-    ]);
-    expect(groups.map((g) => g.phase)).toEqual([
+  it('orders phase groups by Phase.orderIndex, not by first-seen order in the asset list', () => {
+    const { phaseGroups } = buildPhaseGroups(
+      [asset(1, 'B-02', 2, phase2.id), asset(2, 'F-01', 1, phase1.id)],
+      [phase1, phase2],
+    );
+    expect(phaseGroups.map((g) => g.phase)).toEqual([
       'Phase 1: The software time machine',
       'Phase 2: Makerspace trip',
     ]);
   });
 
-  it('falls back to Unphased when an asset has no PhaseGroup attribute', () => {
-    const groups = buildPhaseGroups([asset(3, 'X-01', 1, undefined)]);
-    expect(groups.some((g) => g.phase === 'Unphased')).toBeTrue();
+  it('orders assets within a phase by orderInPhase, falling back to sequenceNumber', () => {
+    const { phaseGroups } = buildPhaseGroups(
+      [
+        asset(1, 'A-01', 10, phase1.id, 10, null),
+        asset(2, 'A-02', 5, phase1.id, 10, 1),
+        asset(3, 'A-03', 1, phase1.id, 10, 0),
+      ],
+      [phase1],
+    );
+    expect(phaseGroups[0].assets.map((a) => a.code)).toEqual(['A-03', 'A-02', 'A-01']);
+  });
+
+  it('buckets assets with no phaseId into a separate unphasedGroup', () => {
+    const { phaseGroups, unphasedGroup } = buildPhaseGroups([asset(3, 'X-01', 1, null)], []);
+    expect(phaseGroups).toEqual([]);
+    expect(unphasedGroup).not.toBeNull();
+    expect(unphasedGroup!.assets.map((a) => a.code)).toEqual(['X-01']);
+    expect(unphasedGroup!.phaseId).toBeNull();
+  });
+
+  it('returns a null unphasedGroup when every asset has a phaseId', () => {
+    const { unphasedGroup } = buildPhaseGroups([asset(1, 'A-01', 1, phase1.id)], [phase1]);
+    expect(unphasedGroup).toBeNull();
+  });
+
+  it('includes a phase group with an empty assets array for a phase with no linked assets yet', () => {
+    const { phaseGroups } = buildPhaseGroups([], [phase1]);
+    expect(phaseGroups).toEqual([{ phaseId: phase1.id, phase: phase1.name, assets: [] }]);
   });
 });
 
