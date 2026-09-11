@@ -48,6 +48,7 @@ public class AssetService : IAssetService
             Notes = request.Notes,
             SequenceNumber = request.SequenceNumber,
             TargetLengthSeconds = request.TargetLengthSeconds,
+            PhaseId = request.PhaseId,
         };
         ApplyAttributes(asset, request.Attributes);
         ApplyBeatLinks(asset, request.BeatIds);
@@ -74,6 +75,7 @@ public class AssetService : IAssetService
         asset.Notes = request.Notes;
         asset.SequenceNumber = request.SequenceNumber;
         asset.TargetLengthSeconds = request.TargetLengthSeconds;
+        asset.PhaseId = request.PhaseId;
 
         _db.AssetAttributes.RemoveRange(asset.Attributes);
         asset.Attributes.Clear();
@@ -172,6 +174,7 @@ public class AssetService : IAssetService
         asset.Notes,
         asset.SequenceNumber,
         asset.TargetLengthSeconds,
+        asset.PhaseId,
         asset.CompletedAtUtc,
         asset.Attributes.ToDictionary(a => a.Key, a => a.Value),
         asset.AssetBeats.Select(ab => ab.BeatId).ToArray());

@@ -274,6 +274,46 @@ public class AssetServiceTests
         Assert.Null(orderInBeatForB);
     }
 
+    [Fact]
+    public async Task CreateAsync_and_GetByIdAsync_round_trip_PhaseId()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, _) = await SeedAsync(context);
+        var episode = (await context.Episodes.FindAsync(episodeId))!;
+        var phase = new Phase { Project = episode.Project, Name = "Setup A", OrderIndex = 0 };
+        context.Phases.Add(phase);
+        await context.SaveChangesAsync();
+        var service = new AssetService(context);
+
+        var created = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-01", "Title", null, "Planned", null, null, null, null, null, PhaseId: phase.Id));
+
+        var fetched = await service.GetByIdAsync(created.Id);
+        Assert.NotNull(fetched);
+        Assert.Equal(phase.Id, fetched!.PhaseId);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_changes_PhaseId()
+    {
+        await using var context = CreateInMemoryContext();
+        var (episodeId, assetTypeId, _) = await SeedAsync(context);
+        var episode = (await context.Episodes.FindAsync(episodeId))!;
+        var phaseA = new Phase { Project = episode.Project, Name = "Setup A", OrderIndex = 0 };
+        var phaseB = new Phase { Project = episode.Project, Name = "Setup B", OrderIndex = 1 };
+        context.Phases.AddRange(phaseA, phaseB);
+        await context.SaveChangesAsync();
+        var service = new AssetService(context);
+        var created = await service.CreateAsync(episodeId, new CreateAssetRequest(
+            assetTypeId, "A-01", "Title", null, "Planned", null, null, null, null, null, PhaseId: phaseA.Id));
+
+        var updated = await service.UpdateAsync(created.Id, new UpdateAssetRequest(
+            assetTypeId, "A-01", "Title", null, "Planned", null, null, null, null, null, PhaseId: phaseB.Id));
+
+        Assert.NotNull(updated);
+        Assert.Equal(phaseB.Id, updated!.PhaseId);
+    }
+
     private static CreateAssetRequest MinimalRequest(int assetTypeId, string code) => new(
         assetTypeId, code, code, null, "Planned", null, null, null, null, null);
 }

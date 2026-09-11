@@ -12,6 +12,7 @@ public record AssetDto(
     string? Notes,
     int? SequenceNumber,
     int? TargetLengthSeconds,
+    int? PhaseId,
     DateTime? CompletedAtUtc,
     Dictionary<string, string> Attributes,
     int[] BeatIds);
@@ -26,7 +27,8 @@ public record CreateAssetRequest(
     int? SequenceNumber,
     int? TargetLengthSeconds,
     Dictionary<string, string>? Attributes,
-    int[]? BeatIds);
+    int[]? BeatIds,
+    int? PhaseId = null);
 
 public record UpdateAssetRequest(
     int AssetTypeId,
@@ -38,4 +40,5 @@ public record UpdateAssetRequest(
     int? SequenceNumber,
     int? TargetLengthSeconds,
     Dictionary<string, string>? Attributes,
-    int[]? BeatIds);
+    int[]? BeatIds,
+    int? PhaseId = null);
