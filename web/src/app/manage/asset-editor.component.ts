@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiClientService } from '../core/api-client.service';
@@ -40,7 +40,8 @@ export class AssetEditorComponent implements OnChanges {
 
   constructor(private readonly api: ApiClientService, private readonly cdr: ChangeDetectorRef) {}
 
-  ngOnChanges(): void {
+  ngOnChanges(changes: SimpleChanges): void {
+    if (!changes['asset']) return;
     this.editCode = this.asset.code;
     this.editTitle = this.asset.title;
     this.editScriptText = this.asset.scriptText ?? '';

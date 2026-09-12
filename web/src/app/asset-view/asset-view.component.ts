@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, effect } from '@angular/core';
+import { ChangeDetectorRef, Component, effect, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { forkJoin, map } from 'rxjs';
@@ -7,7 +7,7 @@ import { ProjectContextService } from '../core/project-context.service';
 import { ASSET_STATUSES, statusPillClass } from '../core/status-style';
 import { AssetDto, AssetTypeDto, BeatDto, PhaseDto } from '../core/models';
 import { AssetEditorComponent } from '../manage/asset-editor.component';
-import { AssetViewFilters, filterAndSortAssets, SortDir, SortKey } from './asset-view.logic';
+import { AssetViewFilters, filterAndSortAssets, SortDir, SortKey, timelineOrderOf } from './asset-view.logic';
 
 @Component({
   selector: 'app-asset-view',
@@ -68,9 +68,17 @@ export class AssetViewComponent {
     this.selectedAssetForEdit = null;
   }
 
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.selectedAssetForEdit !== null) {
+      this.closeEditor();
+      this.cdr.markForCheck();
+    }
+  }
+
   timelineOrderDisplay(asset: AssetDto): string {
-    const ordinals = asset.beatIds.map((id) => this.beatsById.get(id)?.ordinal).filter((o): o is number => o !== undefined);
-    return ordinals.length > 0 ? String(Math.min(...ordinals)) : '—';
+    const v = timelineOrderOf(asset, this.beatsById);
+    return v === Number.MAX_SAFE_INTEGER ? '—' : String(v);
   }
 
   onEditorSaved(updated: AssetDto): void {

@@ -1,7 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { of } from 'rxjs';
 import { signal } from '@angular/core';
 import { AssetViewComponent } from './asset-view.component';
+import { AssetEditorComponent } from '../manage/asset-editor.component';
 import { ApiClientService } from '../core/api-client.service';
 import { ProjectContextService } from '../core/project-context.service';
 import { AssetDto, AssetTypeDto, BeatDto, EpisodeDto, PhaseDto, ProjectDto } from '../core/models';
@@ -97,5 +99,57 @@ describe('AssetViewComponent', () => {
     expect(component.sortDir).toBe('desc');
     component.setSortKey('length');
     expect(component.sortDir).toBe('asc');
+  });
+
+  it('opens the editor when a rendered row is clicked', () => {
+    fixture.detectChanges();
+    const rows = fixture.nativeElement.querySelectorAll('tbody tr');
+    expect(rows.length).toBe(2);
+
+    const targetIndex = component.visibleAssets.findIndex((a) => a.id === assetA.id);
+    (rows[targetIndex] as HTMLElement).click();
+    fixture.detectChanges();
+
+    expect(component.selectedAssetForEdit).toEqual(assetA);
+  });
+
+  it('passes the clicked asset\'s own episode\'s beats to the rendered editor, not another episode\'s', () => {
+    fixture.detectChanges();
+    const rows = fixture.nativeElement.querySelectorAll('tbody tr');
+    const indexOf = (id: number) => component.visibleAssets.findIndex((a) => a.id === id);
+
+    (rows[indexOf(assetA.id)] as HTMLElement).click();
+    fixture.detectChanges();
+    let editor = fixture.debugElement.query(By.directive(AssetEditorComponent)).componentInstance as AssetEditorComponent;
+    expect(editor.beats).toEqual([beat]);
+
+    (rows[indexOf(assetB.id)] as HTMLElement).click();
+    fixture.detectChanges();
+    editor = fixture.debugElement.query(By.directive(AssetEditorComponent)).componentInstance as AssetEditorComponent;
+    expect(editor.beats).toEqual([]);
+  });
+
+  it('closes the editor on Escape when it is open', () => {
+    component.openEditor(assetA);
+    component.onEscapeKey();
+    expect(component.selectedAssetForEdit).toBeNull();
+  });
+
+  it('does nothing on Escape when the editor is already closed', () => {
+    component.closeEditor();
+    expect(() => component.onEscapeKey()).not.toThrow();
+    expect(component.selectedAssetForEdit).toBeNull();
+  });
+
+  describe('timelineOrderDisplay', () => {
+    it('returns the linked beat\'s ordinal as a string', () => {
+      component.beatsById = new Map([[100, beat]]);
+      expect(component.timelineOrderDisplay(assetA)).toBe('0');
+    });
+
+    it('returns an em dash for an asset with no linked beats', () => {
+      component.beatsById = new Map([[100, beat]]);
+      expect(component.timelineOrderDisplay(assetB)).toBe('—');
+    });
   });
 });

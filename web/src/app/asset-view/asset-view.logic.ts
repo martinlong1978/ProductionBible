@@ -9,7 +9,7 @@ export interface AssetViewFilters {
   toShootOnly: boolean;
 }
 
-function timelineOrderOf(asset: AssetDto, beatsById: Map<number, BeatDto>): number {
+export function timelineOrderOf(asset: AssetDto, beatsById: Map<number, BeatDto>): number {
   const ordinals = asset.beatIds
     .map((id) => beatsById.get(id)?.ordinal)
     .filter((o): o is number => o !== undefined);

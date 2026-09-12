@@ -16,10 +16,10 @@ const assetTypesById = new Map([[1, shotType], [2, graphicType]]);
 
 describe('filterAndSortAssets', () => {
   it('sorts by type name', () => {
-    const a = asset({ id: 1, assetTypeId: 2 });
-    const b = asset({ id: 2, assetTypeId: 1 });
+    const a = asset({ id: 1, assetTypeId: 1 }); // Shot
+    const b = asset({ id: 2, assetTypeId: 2 }); // Graphic
     const result = filterAndSortAssets([a, b], assetTypesById, new Map(), { status: null, assetTypeId: null, toShootOnly: false }, 'type', 'asc');
-    expect(result.map((x) => x.id)).toEqual([1, 2]); // 'Graphic' < 'Shot', so Graphic (a) sorts first ascending
+    expect(result.map((x) => x.id)).toEqual([2, 1]); // 'Graphic' < 'Shot', so Graphic (b) sorts first ascending
   });
 
   it('sorts by name (title)', () => {

@@ -1,8 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { SimpleChange } from '@angular/core';
 import { of } from 'rxjs';
 import { AssetEditorComponent } from './asset-editor.component';
 import { ApiClientService } from '../core/api-client.service';
 import { AssetDto, BeatDto } from '../core/models';
+
+const assetChange = (previous: AssetDto | undefined, current: AssetDto) => ({
+  asset: new SimpleChange(previous, current, previous === undefined),
+});
 
 describe('AssetEditorComponent', () => {
   let fixture: ComponentFixture<AssetEditorComponent>;
@@ -32,7 +37,7 @@ describe('AssetEditorComponent', () => {
     component = fixture.componentInstance;
     component.asset = asset;
     component.beats = [beat];
-    component.ngOnChanges();
+    component.ngOnChanges(assetChange(undefined, asset));
     fixture.detectChanges();
   });
 
@@ -45,9 +50,15 @@ describe('AssetEditorComponent', () => {
   it('re-populates when the asset input changes', () => {
     const otherAsset: AssetDto = { ...asset, id: 1001, code: 'A-02', attributes: {} };
     component.asset = otherAsset;
-    component.ngOnChanges();
+    component.ngOnChanges(assetChange(asset, otherAsset));
     expect(component.editCode).toBe('A-02');
     expect(component.editAttributes).toEqual([]);
+  });
+
+  it('does not re-populate fields when an input other than asset changes', () => {
+    component.editCode = 'EDITED';
+    component.ngOnChanges({ beats: new SimpleChange([], [beat], false) });
+    expect(component.editCode).toBe('EDITED');
   });
 
   it('saves, rebuilding the attributes map from the editable rows, and emits the updated asset', () => {
@@ -60,10 +71,19 @@ describe('AssetEditorComponent', () => {
 
     component.save();
 
-    expect(apiSpy.updateAsset).toHaveBeenCalledWith(1000, jasmine.objectContaining({
+    expect(apiSpy.updateAsset).toHaveBeenCalledWith(1000, {
+      assetTypeId: 1,
+      code: 'A-01',
+      title: 'Tool entering the work',
+      scriptText: null,
+      status: 'Planned',
+      notes: null,
+      sequenceNumber: 1,
+      targetLengthSeconds: null,
+      phaseId: 5,
       attributes: { Location: 'Studio', Notes: 'Reshoot' },
       beatIds: [100],
-    }));
+    });
     expect(emitted).toEqual(updated);
   });
 
