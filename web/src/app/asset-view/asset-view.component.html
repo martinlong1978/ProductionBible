@@ -1,1 +1,65 @@
-<div></div>
+<div class="space-y-4">
+  <div class="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4">
+    <label class="text-sm">
+      <span class="mb-1 block text-text-secondary">Status</span>
+      <select [(ngModel)]="filters.status"
+              class="rounded-md border border-border bg-bg px-3 py-1.5 text-sm focus:border-accent focus:outline-none">
+        <option [ngValue]="null">All</option>
+        <option *ngFor="let s of assetStatuses" [ngValue]="s">{{ s }}</option>
+      </select>
+    </label>
+    <label class="text-sm">
+      <span class="mb-1 block text-text-secondary">Shot type</span>
+      <select [(ngModel)]="filters.assetTypeId"
+              class="rounded-md border border-border bg-bg px-3 py-1.5 text-sm focus:border-accent focus:outline-none">
+        <option [ngValue]="null">All</option>
+        <option *ngFor="let t of assetTypes" [ngValue]="t.id">{{ t.name }}</option>
+      </select>
+    </label>
+    <label class="flex items-center gap-1.5 text-sm">
+      <input type="checkbox" [(ngModel)]="filters.toShootOnly" />
+      To shoot only
+    </label>
+  </div>
+
+  <div class="overflow-x-auto rounded-lg border border-border bg-surface">
+    <table class="w-full text-left text-sm">
+      <thead>
+        <tr class="border-b border-border text-xs uppercase tracking-wide text-text-secondary">
+          <th class="px-4 py-2">Code</th>
+          <th class="cursor-pointer px-4 py-2 select-none" (click)="setSortKey('name')">Title</th>
+          <th class="cursor-pointer px-4 py-2 select-none" (click)="setSortKey('type')">Type</th>
+          <th class="cursor-pointer px-4 py-2 select-none" (click)="setSortKey('length')">Length</th>
+          <th class="cursor-pointer px-4 py-2 select-none" (click)="setSortKey('timeline')">Timeline order</th>
+          <th class="cursor-pointer px-4 py-2 select-none" (click)="setSortKey('shooting')">Shooting order</th>
+          <th class="px-4 py-2">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let asset of visibleAssets" (click)="openEditor(asset)"
+            class="cursor-pointer border-b border-border last:border-0 hover:bg-surface-hover">
+          <td class="px-4 py-2 font-mono">{{ asset.code }}</td>
+          <td class="px-4 py-2 font-medium">{{ asset.title }}</td>
+          <td class="px-4 py-2 text-text-secondary">{{ asset.assetTypeName }}</td>
+          <td class="px-4 py-2 text-text-secondary">{{ asset.targetLengthSeconds }}</td>
+          <td class="px-4 py-2 text-text-secondary">{{ timelineOrderDisplay(asset) }}</td>
+          <td class="px-4 py-2 text-text-secondary">{{ asset.sequenceNumber }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium text-white" [ngClass]="statusPillClass(asset.status)">
+              {{ asset.status }}
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div *ngIf="selectedAssetForEdit" class="fixed inset-0 z-20 flex items-center justify-center bg-black/50 p-4"
+       (click)="closeEditor()">
+    <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-surface p-4" (click)="$event.stopPropagation()">
+      <app-asset-editor [asset]="selectedAssetForEdit" [assetTypes]="assetTypes" [phases]="phases"
+                        [beats]="beatsByEpisode.get(selectedAssetForEdit.episodeId) ?? []"
+                        (saved)="onEditorSaved($event)" (cancelled)="closeEditor()"></app-asset-editor>
+    </div>
+  </div>
+</div>

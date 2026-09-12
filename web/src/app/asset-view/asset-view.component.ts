@@ -68,6 +68,11 @@ export class AssetViewComponent {
     this.selectedAssetForEdit = null;
   }
 
+  timelineOrderDisplay(asset: AssetDto): string {
+    const ordinals = asset.beatIds.map((id) => this.beatsById.get(id)?.ordinal).filter((o): o is number => o !== undefined);
+    return ordinals.length > 0 ? String(Math.min(...ordinals)) : '—';
+  }
+
   onEditorSaved(updated: AssetDto): void {
     const index = this.assets.findIndex((a) => a.id === updated.id);
     if (index !== -1) {
