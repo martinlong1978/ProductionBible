@@ -61,25 +61,14 @@ describe('AssetsTabComponent', () => {
     expect(component.beats).toEqual([beat]);
   });
 
-  it('starts an edit with the full field set including attributes and beat links', () => {
+  it('replaces the row and clears editingId when the editor emits saved', () => {
     component.startEdit(asset);
-    expect(component.editCode).toBe('A-01');
-    expect(component.editAttributes).toEqual([{ key: 'Location', value: 'Workshop' }]);
-    expect(component.editBeatIds).toEqual([100]);
-  });
+    const updated = { ...asset, status: 'Shot' };
 
-  it('saves an edit, rebuilding the attributes map from the editable rows', () => {
-    apiSpy.updateAsset.and.returnValue(of(asset));
-    component.startEdit(asset);
-    component.editAttributes = [{ key: 'Location', value: 'Studio' }, { key: 'Notes', value: 'Reshoot' }];
-    component.editBeatIds = [100];
+    component.onEditorSaved(updated);
 
-    component.saveEdit(asset);
-
-    expect(apiSpy.updateAsset).toHaveBeenCalledWith(1000, jasmine.objectContaining({
-      attributes: { Location: 'Studio', Notes: 'Reshoot' },
-      beatIds: [100],
-    }));
+    expect(component.assets.find((a) => a.id === asset.id)?.status).toBe('Shot');
+    expect(component.editingId).toBeNull();
   });
 
   it('creates an asset for the selected episode and reloads', () => {
